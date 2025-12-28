@@ -95,6 +95,7 @@ export default function App() {
   const [gameError, setGameError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedExpansions, setSelectedExpansions] = useState<string[]>([]);
+  const [expansionMenuOpen, setExpansionMenuOpen] = useState(false);
   const [playerIndex, setPlayerIndex] = useState(0);
 
   useEffect(() => {
@@ -190,7 +191,12 @@ export default function App() {
   useEffect(() => {
     setSelectedExpansions([]);
     setPlayerIndex(0);
+    setExpansionMenuOpen(false);
   }, [selectedGameId]);
+
+  useEffect(() => {
+    setExpansionMenuOpen(false);
+  }, [stage]);
 
   const selectedCatalogGame = useMemo(
     () => catalog.find((entry) => entry.id === selectedGameId) ?? null,
@@ -232,6 +238,26 @@ export default function App() {
       .filter((expansion) => selectedExpansions.includes(expansion.id))
       .map((expansion) => expansion.name);
   }, [game, selectedExpansions]);
+
+  const expansionSummaryLabel = useMemo(() => {
+    if (!selectedExpansionNames.length) {
+      return "Base game only";
+    }
+    if (selectedExpansionNames.length === 1) {
+      return selectedExpansionNames[0];
+    }
+    return "Multiple";
+  }, [selectedExpansionNames]);
+
+  const decrementPlayer = () => {
+    setPlayerIndex((index) => Math.max(index - 1, 0));
+  };
+
+  const incrementPlayer = () => {
+    setPlayerIndex((index) =>
+      Math.min(index + 1, sortedPlayerCounts.length - 1)
+    );
+  };
 
   const visibleGames = useMemo(() => {
     const normalized = searchTerm.trim().toLowerCase();
@@ -290,6 +316,10 @@ export default function App() {
     updateGameParam(id);
   };
 
+  const handleGoHome = () => {
+    setStage("search");
+  };
+
   const toggleExpansion = (id: string) => {
     setSelectedExpansions((current) =>
       current.includes(id)
@@ -302,7 +332,9 @@ export default function App() {
     <div className="app">
       <header className="masthead">
         <div className="brand-row">
-          <span className="eyebrow">Board Game Setup</span>
+          <button type="button" className="eyebrow brand-button" onClick={handleGoHome}>
+            Board Game Setup
+          </button>
           <span className="stage-pill">{stageLabels[stage]}</span>
         </div>
         <h1>{stageTitle}</h1>
@@ -430,33 +462,27 @@ export default function App() {
             )}
             {gameError && <div className="status error">{gameError}</div>}
             <div className="player-stepper">
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={() =>
-                  setPlayerIndex((index) => Math.max(index - 1, 0))
-                }
-                disabled={!sortedPlayerCounts.length || playerIndex === 0}
-                aria-label="Decrease players"
-              >
-                -
-              </button>
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={decrementPlayer}
+              disabled={!sortedPlayerCounts.length || playerIndex === 0}
+              aria-label="Decrease players"
+            >
+              -
+            </button>
               <div className="player-count">
                 {playerCount ?? "-"}
               </div>
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={() =>
-                  setPlayerIndex((index) =>
-                    Math.min(index + 1, sortedPlayerCounts.length - 1)
-                  )
-                }
-                disabled={
-                  !sortedPlayerCounts.length ||
-                  playerIndex >= sortedPlayerCounts.length - 1
-                }
-                aria-label="Increase players"
+            <button
+              type="button"
+              className="icon-btn"
+              onClick={incrementPlayer}
+              disabled={
+                !sortedPlayerCounts.length ||
+                playerIndex >= sortedPlayerCounts.length - 1
+              }
+              aria-label="Increase players"
               >
                 +
               </button>
@@ -497,16 +523,71 @@ export default function App() {
             </div>
             <div className="summary-row">
               <span>Players</span>
-              <strong>{playerCount ?? "-"}</strong>
+              <div className="summary-player">
+                <button
+                  type="button"
+                  className="icon-btn small"
+                  onClick={decrementPlayer}
+                  disabled={!sortedPlayerCounts.length || playerIndex === 0}
+                  aria-label="Decrease players"
+                >
+                  -
+                </button>
+                <span className="player-count small">{playerCount ?? "-"}</span>
+                <button
+                  type="button"
+                  className="icon-btn small"
+                  onClick={incrementPlayer}
+                  disabled={
+                    !sortedPlayerCounts.length ||
+                    playerIndex >= sortedPlayerCounts.length - 1
+                  }
+                  aria-label="Increase players"
+                >
+                  +
+                </button>
+              </div>
             </div>
             <div className="summary-row">
               <span>Expansions</span>
-              <strong>
-                {selectedExpansionNames.length
-                  ? selectedExpansionNames.join(", ")
-                  : "Base game only"}
-              </strong>
+              <div className="dropdown">
+                <button
+                  type="button"
+                  className="dropdown-toggle"
+                  onClick={() => setExpansionMenuOpen((open) => !open)}
+                  disabled={!game?.expansions?.length}
+                  aria-expanded={expansionMenuOpen}
+                >
+                  {expansionSummaryLabel}
+                </button>
+              </div>
             </div>
+            {expansionMenuOpen && (
+              <div className="dropdown-panel">
+                {game?.expansions?.length ? (
+                  game.expansions.map((expansion) => {
+                    const checked = selectedExpansions.includes(expansion.id);
+                    return (
+                      <label
+                        key={expansion.id}
+                        className={
+                          checked ? "dropdown-item selected" : "dropdown-item"
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleExpansion(expansion.id)}
+                        />
+                        <span>{expansion.name}</span>
+                      </label>
+                    );
+                  })
+                ) : (
+                  <div className="empty-state">No expansions listed yet.</div>
+                )}
+              </div>
+            )}
           </div>
 
           {gameLoading && <div className="status">Loading setup steps...</div>}
