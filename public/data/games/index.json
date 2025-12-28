@@ -1,13 +1,24 @@
 {
   "games": [
     {
+      "id": "forest-shuffle",
+      "title": "Forest Shuffle",
+      "popularity": 99,
+      "players": "2-5",
+      "playtime": "40-60 min",
+      "tagline": "Draft trees and wildlife to build a thriving forest.",
+      "coverAsset": "forest-shuffle-box",
+      "coverImage": "images/Forest Shuffle.jpg"
+    },
+    {
       "id": "cascadia",
       "title": "Cascadia",
       "popularity": 92,
       "players": "1-4",
       "playtime": "30-45 min",
       "tagline": "Build habitats and align wildlife goals across the table.",
-      "coverAsset": "cascadia-box"
+      "coverAsset": "cascadia-box",
+      "coverImage": "images/Cascadia.png"
     },
     {
       "id": "wingspan",
@@ -16,7 +27,8 @@
       "players": "1-5",
       "playtime": "40-70 min",
       "tagline": "Build a bird preserve with layered engine combos.",
-      "coverAsset": "wingspan-box"
+      "coverAsset": "wingspan-box",
+      "coverImage": "images/Wingspan.png"
     },
     {
       "id": "everdell",
@@ -25,16 +37,8 @@
       "players": "1-4",
       "playtime": "40-80 min",
       "tagline": "Grow a woodland city across the seasons.",
-      "coverAsset": "everdell-box"
-    },
-    {
-      "id": "forest-shuffle",
-      "title": "Forest Shuffle",
-      "popularity": 89,
-      "players": "2-5",
-      "playtime": "40-60 min",
-      "tagline": "Draft trees and wildlife to build a thriving forest.",
-      "coverAsset": "forest-shuffle-box"
+      "coverAsset": "everdell-box",
+      "coverImage": "images/Everdell.png"
     },
     {
       "id": "castle-combo",
@@ -43,7 +47,8 @@
       "players": "2-5",
       "playtime": "30-45 min",
       "tagline": "Recruit characters to craft the perfect castle line up.",
-      "coverAsset": "castle-combo-box"
+      "coverAsset": "castle-combo-box",
+      "coverImage": "images/Castle Combo.png"
     },
     {
       "id": "wyrmspan",
@@ -52,7 +57,8 @@
       "players": "1-5",
       "playtime": "60-90 min",
       "tagline": "Discover dragons and build a cavern sanctuary.",
-      "coverAsset": "wyrmspan-box"
+      "coverAsset": "wyrmspan-box",
+      "coverImage": "images/Wyrmspan.jpg"
     },
     {
       "id": "finspan",
@@ -61,7 +67,8 @@
       "players": "1-5",
       "playtime": "40-70 min",
       "tagline": "Explore the ocean and assemble schools of fish.",
-      "coverAsset": "finspan-box"
+      "coverAsset": "finspan-box",
+      "coverImage": "images/Finspan.jpeg"
     },
     {
       "id": "trekking-the-world",
@@ -70,7 +77,8 @@
       "players": "1-5",
       "playtime": "45-60 min",
       "tagline": "Chart routes across the globe and collect keepsakes.",
-      "coverAsset": "trekking-world-box"
+      "coverAsset": "trekking-world-box",
+      "coverImage": "images/Trekking the world.jpg"
     },
     {
       "id": "vantage",
@@ -79,7 +87,8 @@
       "players": "1-5",
       "playtime": "60-120 min",
       "tagline": "Lead an expedition across shifting frontiers.",
-      "coverAsset": "vantage-box"
+      "coverAsset": "vantage-box",
+      "coverImage": "images/Vantage.png"
     }
   ]
 }

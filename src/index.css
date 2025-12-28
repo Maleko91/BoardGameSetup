@@ -176,8 +176,8 @@ h1 {
 
 .game-cover {
   border-radius: 14px;
-  padding: 18px;
-  min-height: 72px;
+  min-height: 96px;
+  aspect-ratio: 16 / 9;
   background: linear-gradient(140deg, #fff1df, #ffffff);
   color: var(--ink-soft);
   font-size: 0.7rem;
@@ -187,6 +187,19 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+}
+
+.game-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.game-cover-fallback {
+  padding: 18px;
+  text-align: center;
 }
 
 .game-card-body {
@@ -291,9 +304,10 @@ h1 {
 }
 
 .stage-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
-  flex-wrap: wrap;
+  align-items: center;
 }
 
 .btn {
@@ -304,6 +318,8 @@ h1 {
   font-weight: 600;
   cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
+  min-height: 44px;
+  width: 100%;
 }
 
 .btn.primary {
@@ -339,6 +355,12 @@ h1 {
 
 .summary-row strong {
   color: var(--ink);
+}
+
+.summary-row.modules {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
 }
 
 .summary-player {
@@ -418,6 +440,40 @@ h1 {
 }
 
 .dropdown-item.selected {
+  border-color: var(--accent);
+  background: #fff7ef;
+}
+
+.module-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.module-toggle {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.module-toggle span {
+  display: grid;
+  gap: 4px;
+}
+
+.module-toggle em {
+  font-size: 0.82rem;
+  color: var(--ink-soft);
+  font-style: normal;
+}
+
+.module-toggle.selected {
   border-color: var(--accent);
   background: #fff7ef;
 }

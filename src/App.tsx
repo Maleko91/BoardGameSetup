@@ -11,9 +11,28 @@ type Step = {
   visual: Visual;
 };
 
+type StepCondition = {
+  playerCounts?: number[];
+  includeExpansions?: string[];
+  excludeExpansions?: string[];
+  includeModules?: string[];
+  excludeModules?: string[];
+  requireNoExpansions?: boolean;
+};
+
+type ConditionalStep = Step & {
+  when?: StepCondition;
+};
+
 type Expansion = {
   id: string;
   name: string;
+};
+
+type ExpansionModule = {
+  id: string;
+  name: string;
+  description?: string;
 };
 
 type GameData = {
@@ -23,6 +42,8 @@ type GameData = {
   expansions?: Expansion[];
   common: Step[];
   byPlayerCount: Record<string, Step[]>;
+  conditionalSteps?: ConditionalStep[];
+  expansionModules?: Record<string, ExpansionModule[]>;
 };
 
 type CatalogGame = {
@@ -33,6 +54,7 @@ type CatalogGame = {
   playtime: string;
   tagline?: string;
   coverAsset?: string;
+  coverImage?: string;
 };
 
 type CatalogResponse = {
@@ -66,6 +88,15 @@ const updateGameParam = (id: string) => {
   window.history.replaceState({}, "", url.toString());
 };
 
+const clearGameParam = () => {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("game");
+  window.history.replaceState({}, "", url.toString());
+};
+
+const getPublicAssetUrl = (path: string) =>
+  `${import.meta.env.BASE_URL}${encodeURI(path)}`;
+
 const resolveGameId = (candidate: string, games: CatalogGame[]) => {
   if (games.some((game) => game.id === candidate)) {
     return candidate;
@@ -83,9 +114,7 @@ const stageLabels: Record<Stage, string> = {
 
 export default function App() {
   const initialSelection = useMemo(() => getInitialSelection(), []);
-  const [stage, setStage] = useState<Stage>(
-    initialSelection.explicit ? "expansions" : "search"
-  );
+  const [stage, setStage] = useState<Stage>("search");
   const [selectedGameId, setSelectedGameId] = useState(initialSelection.id);
   const [catalog, setCatalog] = useState<CatalogGame[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
@@ -96,6 +125,7 @@ export default function App() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedExpansions, setSelectedExpansions] = useState<string[]>([]);
   const [expansionMenuOpen, setExpansionMenuOpen] = useState(false);
+  const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [playerIndex, setPlayerIndex] = useState(0);
 
   useEffect(() => {
@@ -190,6 +220,7 @@ export default function App() {
 
   useEffect(() => {
     setSelectedExpansions([]);
+    setSelectedModules([]);
     setPlayerIndex(0);
     setExpansionMenuOpen(false);
   }, [selectedGameId]);
@@ -197,6 +228,19 @@ export default function App() {
   useEffect(() => {
     setExpansionMenuOpen(false);
   }, [stage]);
+
+  useEffect(() => {
+    if (!game?.expansionModules) {
+      setSelectedModules([]);
+      return;
+    }
+    const allowed = new Set(
+      selectedExpansions.flatMap(
+        (expansionId) => game.expansionModules?.[expansionId] ?? []
+      ).map((module) => module.id)
+    );
+    setSelectedModules((current) => current.filter((id) => allowed.has(id)));
+  }, [game, selectedExpansions]);
 
   const selectedCatalogGame = useMemo(
     () => catalog.find((entry) => entry.id === selectedGameId) ?? null,
@@ -227,8 +271,51 @@ export default function App() {
     }
     const commonSteps = Array.isArray(game.common) ? game.common : [];
     const countSteps = game.byPlayerCount?.[String(playerCount)] ?? [];
-    return [...commonSteps, ...countSteps].sort((a, b) => a.order - b.order);
-  }, [game, playerCount]);
+    const conditionalSteps = (game.conditionalSteps ?? []).filter((step) => {
+      const condition = step.when;
+      if (!condition) {
+        return true;
+      }
+      if (condition.playerCounts && !condition.playerCounts.includes(playerCount)) {
+        return false;
+      }
+      if (condition.requireNoExpansions && selectedExpansions.length > 0) {
+        return false;
+      }
+      if (
+        condition.includeExpansions &&
+        !condition.includeExpansions.every((id) =>
+          selectedExpansions.includes(id)
+        )
+      ) {
+        return false;
+      }
+      if (
+        condition.excludeExpansions &&
+        condition.excludeExpansions.some((id) =>
+          selectedExpansions.includes(id)
+        )
+      ) {
+        return false;
+      }
+      if (
+        condition.includeModules &&
+        !condition.includeModules.every((id) => selectedModules.includes(id))
+      ) {
+        return false;
+      }
+      if (
+        condition.excludeModules &&
+        condition.excludeModules.some((id) => selectedModules.includes(id))
+      ) {
+        return false;
+      }
+      return true;
+    });
+    return [...commonSteps, ...countSteps, ...conditionalSteps].sort(
+      (a, b) => a.order - b.order
+    );
+  }, [game, playerCount, selectedExpansions, selectedModules]);
 
   const selectedExpansionNames = useMemo(() => {
     if (!game?.expansions?.length) {
@@ -237,6 +324,15 @@ export default function App() {
     return game.expansions
       .filter((expansion) => selectedExpansions.includes(expansion.id))
       .map((expansion) => expansion.name);
+  }, [game, selectedExpansions]);
+
+  const activeModules = useMemo(() => {
+    if (!game?.expansionModules) {
+      return [];
+    }
+    return selectedExpansions.flatMap(
+      (expansionId) => game.expansionModules?.[expansionId] ?? []
+    );
   }, [game, selectedExpansions]);
 
   const expansionSummaryLabel = useMemo(() => {
@@ -318,10 +414,19 @@ export default function App() {
 
   const handleGoHome = () => {
     setStage("search");
+    clearGameParam();
   };
 
   const toggleExpansion = (id: string) => {
     setSelectedExpansions((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id]
+    );
+  };
+
+  const toggleModule = (id: string) => {
+    setSelectedModules((current) =>
       current.includes(id)
         ? current.filter((item) => item !== id)
         : [...current, id]
@@ -375,7 +480,17 @@ export default function App() {
                 aria-pressed={entry.id === selectedGameId}
               >
                 <div className="game-cover">
-                  {entry.coverAsset ?? entry.id}
+                  {entry.coverImage ? (
+                    <img
+                      src={getPublicAssetUrl(entry.coverImage)}
+                      alt={`${entry.title} cover`}
+                      loading="lazy"
+                    />
+                  ) : (
+                    <span className="game-cover-fallback">
+                      {entry.coverAsset ?? entry.id}
+                    </span>
+                  )}
                 </div>
                 <div className="game-card-body">
                   <div className="game-card-title">{entry.title}</div>
@@ -586,6 +701,36 @@ export default function App() {
                 ) : (
                   <div className="empty-state">No expansions listed yet.</div>
                 )}
+              </div>
+            )}
+            {activeModules.length > 0 && (
+              <div className="summary-row modules">
+                <span>Exploration modules</span>
+                <div className="module-grid">
+                  {activeModules.map((module) => {
+                    const checked = selectedModules.includes(module.id);
+                    return (
+                      <label
+                        key={module.id}
+                        className={
+                          checked ? "module-toggle selected" : "module-toggle"
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={() => toggleModule(module.id)}
+                        />
+                        <span>
+                          {module.name}
+                          {module.description ? (
+                            <em>{module.description}</em>
+                          ) : null}
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
             )}
           </div>
