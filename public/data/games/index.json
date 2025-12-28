@@ -1,0 +1,85 @@
+{
+  "games": [
+    {
+      "id": "cascadia",
+      "title": "Cascadia",
+      "popularity": 92,
+      "players": "1-4",
+      "playtime": "30-45 min",
+      "tagline": "Build habitats and align wildlife goals across the table.",
+      "coverAsset": "cascadia-box"
+    },
+    {
+      "id": "wingspan",
+      "title": "Wingspan",
+      "popularity": 95,
+      "players": "1-5",
+      "playtime": "40-70 min",
+      "tagline": "Build a bird preserve with layered engine combos.",
+      "coverAsset": "wingspan-box"
+    },
+    {
+      "id": "everdell",
+      "title": "Everdell",
+      "popularity": 90,
+      "players": "1-4",
+      "playtime": "40-80 min",
+      "tagline": "Grow a woodland city across the seasons.",
+      "coverAsset": "everdell-box"
+    },
+    {
+      "id": "forest-shuffle",
+      "title": "Forest Shuffle",
+      "popularity": 89,
+      "players": "2-5",
+      "playtime": "40-60 min",
+      "tagline": "Draft trees and wildlife to build a thriving forest.",
+      "coverAsset": "forest-shuffle-box"
+    },
+    {
+      "id": "castle-combo",
+      "title": "Castle Combo",
+      "popularity": 83,
+      "players": "2-5",
+      "playtime": "30-45 min",
+      "tagline": "Recruit characters to craft the perfect castle line up.",
+      "coverAsset": "castle-combo-box"
+    },
+    {
+      "id": "wyrmspan",
+      "title": "Wyrmspan",
+      "popularity": 88,
+      "players": "1-5",
+      "playtime": "60-90 min",
+      "tagline": "Discover dragons and build a cavern sanctuary.",
+      "coverAsset": "wyrmspan-box"
+    },
+    {
+      "id": "finspan",
+      "title": "Finspan",
+      "popularity": 86,
+      "players": "1-5",
+      "playtime": "40-70 min",
+      "tagline": "Explore the ocean and assemble schools of fish.",
+      "coverAsset": "finspan-box"
+    },
+    {
+      "id": "trekking-the-world",
+      "title": "Trekking the World",
+      "popularity": 84,
+      "players": "1-5",
+      "playtime": "45-60 min",
+      "tagline": "Chart routes across the globe and collect keepsakes.",
+      "coverAsset": "trekking-world-box"
+    },
+    {
+      "id": "vantage",
+      "title": "Vantage",
+      "popularity": 82,
+      "players": "1-5",
+      "playtime": "60-120 min",
+      "tagline": "Lead an expedition across shifting frontiers.",
+      "coverAsset": "vantage-box"
+    }
+  ]
+}

@@ -1,0 +1,89 @@
+{
+  "id": "trekking-the-world",
+  "title": "Trekking the World",
+  "playerCounts": [1, 2, 3, 4, 5],
+  "expansions": [
+    {
+      "id": "passport-pack",
+      "name": "Passport Pack"
+    },
+    {
+      "id": "monuments",
+      "name": "Monuments"
+    },
+    {
+      "id": "journeys",
+      "name": "Journeys"
+    }
+  ],
+  "common": [
+    {
+      "order": 1,
+      "text": "Lay out the world map, destination cards, and route tokens.",
+      "visual": {
+        "asset": "world-map",
+        "animation": "spread"
+      }
+    },
+    {
+      "order": 3,
+      "text": "Shuffle the trek deck and reveal the starting market.",
+      "visual": {
+        "asset": "trek-deck",
+        "animation": "fan"
+      }
+    }
+  ],
+  "byPlayerCount": {
+    "1": [
+      {
+        "order": 2,
+        "text": "Set up the solo deck and goal cards.",
+        "visual": {
+          "asset": "solo-goals",
+          "animation": "stack"
+        }
+      }
+    ],
+    "2": [
+      {
+        "order": 2,
+        "text": "Give each player their pawn and starting tickets.",
+        "visual": {
+          "asset": "player-pawns",
+          "animation": "deal"
+        }
+      }
+    ],
+    "3": [
+      {
+        "order": 2,
+        "text": "Give each player their pawn and starting tickets.",
+        "visual": {
+          "asset": "player-pawns",
+          "animation": "deal"
+        }
+      }
+    ],
+    "4": [
+      {
+        "order": 2,
+        "text": "Give each player their pawn and starting tickets.",
+        "visual": {
+          "asset": "player-pawns",
+          "animation": "deal"
+        }
+      }
+    ],
+    "5": [
+      {
+        "order": 2,
+        "text": "Give each player their pawn and starting tickets.",
+        "visual": {
+          "asset": "player-pawns",
+          "animation": "deal"
+        }
+      }
+    ]
+  }
+}

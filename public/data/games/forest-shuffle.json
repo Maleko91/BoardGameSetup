@@ -1,0 +1,79 @@
+{
+  "id": "forest-shuffle",
+  "title": "Forest Shuffle",
+  "playerCounts": [2, 3, 4, 5],
+  "expansions": [
+    {
+      "id": "alpine",
+      "name": "Alpine"
+    },
+    {
+      "id": "woodland-edge",
+      "name": "Woodland Edge"
+    },
+    {
+      "id": "understory",
+      "name": "Understory"
+    }
+  ],
+  "common": [
+    {
+      "order": 1,
+      "text": "Shuffle the forest deck and reveal the initial clearing row.",
+      "visual": {
+        "asset": "forest-deck",
+        "animation": "fan"
+      }
+    },
+    {
+      "order": 3,
+      "text": "Place scoring markers and acorn tokens within reach.",
+      "visual": {
+        "asset": "scoring-track",
+        "animation": "place"
+      }
+    }
+  ],
+  "byPlayerCount": {
+    "2": [
+      {
+        "order": 2,
+        "text": "Deal each player 6 cards and a reference card.",
+        "visual": {
+          "asset": "starting-hand",
+          "animation": "deal"
+        }
+      }
+    ],
+    "3": [
+      {
+        "order": 2,
+        "text": "Deal each player 6 cards and a reference card.",
+        "visual": {
+          "asset": "starting-hand",
+          "animation": "deal"
+        }
+      }
+    ],
+    "4": [
+      {
+        "order": 2,
+        "text": "Deal each player 6 cards and a reference card.",
+        "visual": {
+          "asset": "starting-hand",
+          "animation": "deal"
+        }
+      }
+    ],
+    "5": [
+      {
+        "order": 2,
+        "text": "Deal each player 6 cards and a reference card.",
+        "visual": {
+          "asset": "starting-hand",
+          "animation": "deal"
+        }
+      }
+    ]
+  }
+}

@@ -1,30 +1,27 @@
-# Board Game Setup
+﻿# Board Setup MVP
 
-Board Game Setup is a planning tool for organizing game nights. The site helps players
-collect game details, assign roles, and track setup steps so a session can start fast.
+Minimal React + Vite + TypeScript MVP for board game setup steps and visuals.
 
-## MVP goals
-- Create a shared list of games with player counts, duration, and setup time.
-- Capture setup checklists for each game (components, layout, and pre-game tasks).
-- Share a session plan so the host can coordinate who brings what.
-- Provide a fast way to mark tasks as done during setup.
-
-## Tech stack
-- [Vite](https://vitejs.dev/) for the frontend build tool.
-- Vanilla JavaScript, HTML, and CSS for an approachable starting point.
-
-## Getting started
+## Local development
 ```bash
 npm install
 npm run dev
 ```
 
-## Project structure
+## Data
+- Game data lives in `public/data/games/*.json`.
+- The game is chosen via `?game=cascadia` (defaults to `cascadia`).
+- JSON is loaded at runtime using `import.meta.env.BASE_URL` so it works on GitHub Pages.
+
+## Build
+```bash
+npm run build
+npm run preview
 ```
-.
-├── index.html
-├── src
-│   ├── main.js
-│   └── styles.css
-└── README.md
-```
+
+## GitHub Pages setup
+1. Ensure the repo is named `BoardGameSetup`.
+2. `vite.config.ts` already sets `base: "/BoardGameSetup/"`.
+3. In GitHub, go to Settings -> Pages and select Source: GitHub Actions.
+4. Push to `main` to trigger the deploy workflow.
+

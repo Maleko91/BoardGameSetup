@@ -1,0 +1,89 @@
+{
+  "id": "finspan",
+  "title": "Finspan",
+  "playerCounts": [1, 2, 3, 4, 5],
+  "expansions": [
+    {
+      "id": "open-seas",
+      "name": "Open Seas"
+    },
+    {
+      "id": "abyssal-depths",
+      "name": "Abyssal Depths"
+    },
+    {
+      "id": "reef-life",
+      "name": "Reef Life"
+    }
+  ],
+  "common": [
+    {
+      "order": 1,
+      "text": "Lay out the ocean zones and fish token supply.",
+      "visual": {
+        "asset": "ocean-zones",
+        "animation": "layout"
+      }
+    },
+    {
+      "order": 3,
+      "text": "Shuffle the fish deck and reveal the starting market.",
+      "visual": {
+        "asset": "fish-deck",
+        "animation": "fan"
+      }
+    }
+  ],
+  "byPlayerCount": {
+    "1": [
+      {
+        "order": 2,
+        "text": "Set up the solo deck and player mat.",
+        "visual": {
+          "asset": "solo-deck",
+          "animation": "stack"
+        }
+      }
+    ],
+    "2": [
+      {
+        "order": 2,
+        "text": "Give each player a mat and starting fish tokens.",
+        "visual": {
+          "asset": "player-setup",
+          "animation": "deal"
+        }
+      }
+    ],
+    "3": [
+      {
+        "order": 2,
+        "text": "Give each player a mat and starting fish tokens.",
+        "visual": {
+          "asset": "player-setup",
+          "animation": "deal"
+        }
+      }
+    ],
+    "4": [
+      {
+        "order": 2,
+        "text": "Give each player a mat and starting fish tokens.",
+        "visual": {
+          "asset": "player-setup",
+          "animation": "deal"
+        }
+      }
+    ],
+    "5": [
+      {
+        "order": 2,
+        "text": "Give each player a mat and starting fish tokens.",
+        "visual": {
+          "asset": "player-setup",
+          "animation": "deal"
+        }
+      }
+    ]
+  }
+}

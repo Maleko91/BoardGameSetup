@@ -1,0 +1,79 @@
+{
+  "id": "castle-combo",
+  "title": "Castle Combo",
+  "playerCounts": [2, 3, 4, 5],
+  "expansions": [
+    {
+      "id": "royal-decree",
+      "name": "Royal Decree"
+    },
+    {
+      "id": "market-day",
+      "name": "Market Day"
+    },
+    {
+      "id": "guild-hall",
+      "name": "Guild Hall"
+    }
+  ],
+  "common": [
+    {
+      "order": 1,
+      "text": "Place the castle market boards and shuffle the citizen decks.",
+      "visual": {
+        "asset": "castle-market",
+        "animation": "layout"
+      }
+    },
+    {
+      "order": 3,
+      "text": "Set out coin and prestige token supplies.",
+      "visual": {
+        "asset": "coin-supply",
+        "animation": "scatter"
+      }
+    }
+  ],
+  "byPlayerCount": {
+    "2": [
+      {
+        "order": 2,
+        "text": "Give each player a starter hand and 5 coins.",
+        "visual": {
+          "asset": "starter-hand",
+          "animation": "deal"
+        }
+      }
+    ],
+    "3": [
+      {
+        "order": 2,
+        "text": "Give each player a starter hand and 5 coins.",
+        "visual": {
+          "asset": "starter-hand",
+          "animation": "deal"
+        }
+      }
+    ],
+    "4": [
+      {
+        "order": 2,
+        "text": "Give each player a starter hand and 5 coins.",
+        "visual": {
+          "asset": "starter-hand",
+          "animation": "deal"
+        }
+      }
+    ],
+    "5": [
+      {
+        "order": 2,
+        "text": "Give each player a starter hand and 5 coins.",
+        "visual": {
+          "asset": "starter-hand",
+          "animation": "deal"
+        }
+      }
+    ]
+  }
+}

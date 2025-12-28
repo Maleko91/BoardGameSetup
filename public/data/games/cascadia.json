@@ -1,0 +1,79 @@
+{
+  "id": "cascadia",
+  "title": "Cascadia",
+  "playerCounts": [1, 2, 3, 4],
+  "expansions": [
+    {
+      "id": "landmarks",
+      "name": "Landmarks"
+    },
+    {
+      "id": "rolling-hills",
+      "name": "Rolling Hills"
+    },
+    {
+      "id": "solo-challenges",
+      "name": "Solo Challenges"
+    }
+  ],
+  "common": [
+    {
+      "order": 1,
+      "text": "Lay out the central habitat tile market and sort the wildlife tokens.",
+      "visual": {
+        "asset": "habitat-tiles",
+        "animation": "scatter"
+      }
+    },
+    {
+      "order": 3,
+      "text": "Place the scoring cards and nature tokens within reach of all players.",
+      "visual": {
+        "asset": "scoring-cards",
+        "animation": "fan"
+      }
+    }
+  ],
+  "byPlayerCount": {
+    "1": [
+      {
+        "order": 2,
+        "text": "Deal 3 habitat tiles and 3 wildlife tokens to start your solo tableau.",
+        "visual": {
+          "asset": "solo-tableau",
+          "animation": "deal"
+        }
+      }
+    ],
+    "2": [
+      {
+        "order": 2,
+        "text": "Deal each player 3 habitat tiles and 3 wildlife tokens for their starting area.",
+        "visual": {
+          "asset": "player-starts",
+          "animation": "deal"
+        }
+      }
+    ],
+    "3": [
+      {
+        "order": 2,
+        "text": "Give each player 3 habitat tiles and 3 wildlife tokens to begin the game.",
+        "visual": {
+          "asset": "player-starts",
+          "animation": "deal"
+        }
+      }
+    ],
+    "4": [
+      {
+        "order": 2,
+        "text": "Give each player 3 habitat tiles and 3 wildlife tokens to begin the game.",
+        "visual": {
+          "asset": "player-starts",
+          "animation": "deal"
+        }
+      }
+    ]
+  }
+}
