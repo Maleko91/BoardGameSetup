@@ -1,6 +1,6 @@
-﻿# Board Setup MVP
+# Board Game Setups
 
-Minimal React + Vite + TypeScript MVP for board game setup steps and visuals.
+Board Game Setups is a minimal React + Vite + TypeScript MVP for board game setup steps and visuals.
 
 ## Local development
 ```bash

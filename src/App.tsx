@@ -44,6 +44,7 @@ type GameData = {
   byPlayerCount: Record<string, Step[]>;
   conditionalSteps?: ConditionalStep[];
   expansionModules?: Record<string, ExpansionModule[]>;
+  rulesUrl?: string;
 };
 
 type CatalogGame = {
@@ -63,7 +64,7 @@ type CatalogResponse = {
 
 const DEFAULT_GAME = "cascadia";
 
-type Stage = "search" | "expansions" | "players" | "steps";
+type Stage = "search" | "steps";
 
 type InitialSelection = {
   id: string;
@@ -82,16 +83,29 @@ const getInitialSelection = (): InitialSelection => {
   return { id: trimmed, explicit: true };
 };
 
-const updateGameParam = (id: string) => {
+const buildUrl = (gameId?: string | null) => {
   const url = new URL(window.location.href);
-  url.searchParams.set("game", id);
-  window.history.replaceState({}, "", url.toString());
+  if (gameId) {
+    url.searchParams.set("game", gameId);
+  } else {
+    url.searchParams.delete("game");
+  }
+  return url;
 };
 
-const clearGameParam = () => {
-  const url = new URL(window.location.href);
-  url.searchParams.delete("game");
-  window.history.replaceState({}, "", url.toString());
+const replaceSearchState = () => {
+  const url = buildUrl(null);
+  window.history.replaceState({ stage: "search" }, "", url.toString());
+};
+
+const replaceGameState = (gameId: string) => {
+  const url = buildUrl(gameId);
+  window.history.replaceState({ stage: "steps", game: gameId }, "", url.toString());
+};
+
+const pushGameState = (gameId: string) => {
+  const url = buildUrl(gameId);
+  window.history.pushState({ stage: "steps", game: gameId }, "", url.toString());
 };
 
 const getPublicAssetUrl = (path: string) =>
@@ -105,16 +119,13 @@ const resolveGameId = (candidate: string, games: CatalogGame[]) => {
   return fallback ? fallback.id : candidate;
 };
 
-const stageLabels: Record<Stage, string> = {
-  search: "Search",
-  expansions: "Expansions",
-  players: "Players",
-  steps: "Setup",
-};
-
 export default function App() {
   const initialSelection = useMemo(() => getInitialSelection(), []);
   const [stage, setStage] = useState<Stage>("search");
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    const stored = window.localStorage.getItem("theme");
+    return stored === "light" ? "light" : "dark";
+  });
   const [selectedGameId, setSelectedGameId] = useState(initialSelection.id);
   const [catalog, setCatalog] = useState<CatalogGame[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
@@ -167,15 +178,26 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    window.localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  useEffect(() => {
+    replaceSearchState();
+  }, []);
+
+  useEffect(() => {
     if (!catalog.length) {
       return;
     }
     const resolved = resolveGameId(selectedGameId, catalog);
     if (resolved !== selectedGameId) {
       setSelectedGameId(resolved);
-      updateGameParam(resolved);
+      if (stage === "steps") {
+        replaceGameState(resolved);
+      }
     }
-  }, [catalog, selectedGameId]);
+  }, [catalog, selectedGameId, stage]);
 
   useEffect(() => {
     if (!selectedGameId) {
@@ -241,6 +263,23 @@ export default function App() {
     );
     setSelectedModules((current) => current.filter((id) => allowed.has(id)));
   }, [game, selectedExpansions]);
+
+  useEffect(() => {
+    const handlePopState = (event: PopStateEvent) => {
+      const state = event.state as { stage?: Stage; game?: string | null } | null;
+      if (state?.stage === "steps" && state.game) {
+        setSelectedGameId(state.game);
+        setStage("steps");
+        return;
+      }
+      setStage("search");
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => {
+      window.removeEventListener("popstate", handlePopState);
+    };
+  }, []);
 
   const selectedCatalogGame = useMemo(
     () => catalog.find((entry) => entry.id === selectedGameId) ?? null,
@@ -376,14 +415,10 @@ export default function App() {
     switch (stage) {
       case "search":
         return "Search and play";
-      case "expansions":
-        return "Choose expansions";
-      case "players":
-        return "Set player count";
       case "steps":
         return "Setup checklist";
       default:
-        return "Board Setup";
+        return "Board Game Setups";
     }
   }, [stage]);
 
@@ -391,12 +426,6 @@ export default function App() {
     switch (stage) {
       case "search":
         return "Search the library and tap a game to begin.";
-      case "expansions":
-        return selectedCatalogGame
-          ? `Select optional expansions for ${selectedCatalogGame.title}.`
-          : "Select optional expansions for this game.";
-      case "players":
-        return "Use the plus and minus buttons to set the table size.";
       case "steps":
         return playerCount
           ? `Merged setup steps for ${playerCount} players.`
@@ -408,13 +437,17 @@ export default function App() {
 
   const handleSelectGame = (id: string) => {
     setSelectedGameId(id);
-    setStage("expansions");
-    updateGameParam(id);
+    setStage("steps");
+    pushGameState(id);
   };
 
   const handleGoHome = () => {
     setStage("search");
-    clearGameParam();
+    replaceSearchState();
+  };
+
+  const handleToggleTheme = () => {
+    setTheme((current) => (current === "dark" ? "light" : "dark"));
   };
 
   const toggleExpansion = (id: string) => {
@@ -425,22 +458,68 @@ export default function App() {
     );
   };
 
-  const toggleModule = (id: string) => {
-    setSelectedModules((current) =>
-      current.includes(id)
-        ? current.filter((item) => item !== id)
-        : [...current, id]
-    );
-  };
+const toggleModule = (id: string) => {
+  setSelectedModules((current) =>
+    current.includes(id)
+      ? current.filter((item) => item !== id)
+      : [...current, id]
+  );
+};
+
+const summarizeStep = (text: string) => {
+  const trimmed = text.trim();
+  if (!trimmed) {
+    return "Step";
+  }
+  const sentence = trimmed.split(".")[0] ?? trimmed;
+  const cleaned = sentence.replace(/[^a-zA-Z0-9\s-]/g, "");
+  const stopwords = new Set([
+    "the",
+    "a",
+    "an",
+    "and",
+    "or",
+    "to",
+    "of",
+    "for",
+    "in",
+    "on",
+    "with",
+    "as",
+    "at",
+    "by",
+    "from",
+    "into",
+    "your",
+    "each"
+  ]);
+  const words = cleaned.split(/\s+/).filter(Boolean);
+  const keywords = words.filter(
+    (word) => word.length > 2 && !stopwords.has(word.toLowerCase())
+  );
+  if (!keywords.length) {
+    return "Key step";
+  }
+  const summary = keywords.slice(0, 6).join(" ");
+  return summary.charAt(0).toUpperCase() + summary.slice(1);
+};
 
   return (
     <div className="app">
       <header className="masthead">
         <div className="brand-row">
           <button type="button" className="eyebrow brand-button" onClick={handleGoHome}>
-            Board Game Setup
+            Board Game Setups
           </button>
-          <span className="stage-pill">{stageLabels[stage]}</span>
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={handleToggleTheme}
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            data-next={theme === "dark" ? "light" : "dark"}
+          >
+            {theme === "dark" ? "Light Mode" : "Dark Mode"}
+          </button>
         </div>
         <h1>{stageTitle}</h1>
         <p className="subtitle">{stageSubtitle}</p>
@@ -508,124 +587,6 @@ export default function App() {
           {!catalogLoading && !catalogError && visibleGames.length === 0 && (
             <div className="empty-state">No games match that search yet.</div>
           )}
-        </section>
-      )}
-
-      {stage === "expansions" && (
-        <section className="stage">
-          <div className="panel">
-            <h2>Expansions</h2>
-            <p className="hint">
-              Select all expansions you want to include for this playthrough.
-            </p>
-            {gameLoading && <div className="status">Loading expansions...</div>}
-            {gameError && <div className="status error">{gameError}</div>}
-            {!gameLoading && !gameError && (
-              <div className="expansion-list">
-                {game?.expansions?.length ? (
-                  game.expansions.map((expansion) => {
-                    const checked = selectedExpansions.includes(expansion.id);
-                    return (
-                      <label
-                        key={expansion.id}
-                        className={
-                          checked
-                            ? "expansion-item selected"
-                            : "expansion-item"
-                        }
-                      >
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleExpansion(expansion.id)}
-                        />
-                        <span>{expansion.name}</span>
-                      </label>
-                    );
-                  })
-                ) : (
-                  <div className="empty-state">No expansions listed yet.</div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="stage-actions">
-            <button type="button" className="btn ghost" onClick={() => setStage("search")}
-            >
-              Back to games
-            </button>
-            <button
-              type="button"
-              className="btn primary"
-              onClick={() => setStage("players")}
-              disabled={gameLoading || !!gameError}
-            >
-              Continue to players
-            </button>
-          </div>
-        </section>
-      )}
-
-      {stage === "players" && (
-        <section className="stage">
-          <div className="panel">
-            <h2>Player count</h2>
-            <p className="hint">Tap plus or minus to set the table size.</p>
-            {gameLoading && (
-              <div className="status">Loading player options...</div>
-            )}
-            {gameError && <div className="status error">{gameError}</div>}
-            <div className="player-stepper">
-            <button
-              type="button"
-              className="icon-btn"
-              onClick={decrementPlayer}
-              disabled={!sortedPlayerCounts.length || playerIndex === 0}
-              aria-label="Decrease players"
-            >
-              -
-            </button>
-              <div className="player-count">
-                {playerCount ?? "-"}
-              </div>
-            <button
-              type="button"
-              className="icon-btn"
-              onClick={incrementPlayer}
-              disabled={
-                !sortedPlayerCounts.length ||
-                playerIndex >= sortedPlayerCounts.length - 1
-              }
-              aria-label="Increase players"
-              >
-                +
-              </button>
-            </div>
-            {sortedPlayerCounts.length ? (
-              <div className="helper">
-                Available: {sortedPlayerCounts[0]}-{" "}
-                {sortedPlayerCounts[sortedPlayerCounts.length - 1]} players
-              </div>
-            ) : (
-              <div className="empty-state">No player counts listed yet.</div>
-            )}
-          </div>
-
-          <div className="stage-actions">
-            <button type="button" className="btn ghost" onClick={() => setStage("expansions")}
-            >
-              Back to expansions
-            </button>
-            <button
-              type="button"
-              className="btn primary"
-              onClick={() => setStage("steps")}
-              disabled={!playerCount || gameLoading || !!gameError}
-            >
-              View setup steps
-            </button>
-          </div>
         </section>
       )}
 
@@ -744,15 +705,11 @@ export default function App() {
                 steps.map((step, index) => (
                   <article className="step-card" key={`${step.order}-${index}`}>
                     <div className="step-image">
-                      <span>{step.visual?.asset ?? "component"}</span>
+                      <span>{summarizeStep(step.text)}</span>
                     </div>
                     <div className="step-body">
                       <div className="step-index">Step {index + 1}</div>
                       <p>{step.text}</p>
-                      <div className="step-meta">
-                        <span>Asset: {step.visual?.asset ?? "TBD"}</span>
-                        <span>Animation: {step.visual?.animation ?? "TBD"}</span>
-                      </div>
                     </div>
                   </article>
                 ))
@@ -763,10 +720,20 @@ export default function App() {
           )}
 
           <div className="stage-actions">
-            <button type="button" className="btn ghost" onClick={() => setStage("players")}
-            >
-              Back to players
-            </button>
+            {game?.rulesUrl ? (
+              <a
+                className="btn ghost"
+                href={game.rulesUrl}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Rules
+              </a>
+            ) : (
+              <button type="button" className="btn ghost" disabled>
+                Rules
+              </button>
+            )}
             <button type="button" className="btn primary" onClick={() => setStage("search")}
             >
               Choose another game
