@@ -251,11 +251,32 @@ h1 {
   transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
   backdrop-filter: blur(12px);
   align-self: start;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+  user-select: none;
+  touch-action: manipulation;
 }
 
-.game-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 26px 54px rgba(5, 4, 10, 0.7);
+@media (hover: hover) and (pointer: fine) {
+  .game-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 26px 54px rgba(5, 4, 10, 0.7);
+  }
+}
+
+@media (pointer: coarse) {
+  .game-card {
+    transition: none;
+  }
+
+  .game-card:hover,
+  .game-card:active,
+  .game-card:focus,
+  .game-card:focus-visible {
+    transform: none;
+    box-shadow: var(--shadow-soft);
+    outline: none;
+  }
 }
 
 .game-cover {
