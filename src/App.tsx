@@ -414,7 +414,7 @@ export default function App() {
   const stageTitle = useMemo(() => {
     switch (stage) {
       case "search":
-        return "Search and play";
+        return "Setup and Play";
       case "steps":
         return "Setup checklist";
       default:
@@ -427,9 +427,7 @@ export default function App() {
       case "search":
         return "Search the library and tap a game to begin.";
       case "steps":
-        return playerCount
-          ? `Merged setup steps for ${playerCount} players.`
-          : "Merged setup steps for your session.";
+        return "";
       default:
         return "";
     }
@@ -522,7 +520,7 @@ const summarizeStep = (text: string) => {
           </button>
         </div>
         <h1>{stageTitle}</h1>
-        <p className="subtitle">{stageSubtitle}</p>
+        {stageSubtitle ? <p className="subtitle">{stageSubtitle}</p> : null}
       </header>
 
       {stage === "search" && (
@@ -574,7 +572,7 @@ const summarizeStep = (text: string) => {
                 <div className="game-card-body">
                   <div className="game-card-title">{entry.title}</div>
                   <div className="game-card-meta">
-                    {entry.players} players - {entry.playtime}
+                    {entry.players} players
                   </div>
                   {entry.tagline && (
                     <div className="game-card-tagline">{entry.tagline}</div>
@@ -629,7 +627,9 @@ const summarizeStep = (text: string) => {
               <div className="dropdown">
                 <button
                   type="button"
-                  className="dropdown-toggle"
+                  className={
+                    expansionMenuOpen ? "dropdown-toggle open" : "dropdown-toggle"
+                  }
                   onClick={() => setExpansionMenuOpen((open) => !open)}
                   disabled={!game?.expansions?.length}
                   aria-expanded={expansionMenuOpen}
