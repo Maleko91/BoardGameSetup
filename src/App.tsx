@@ -124,7 +124,7 @@ export default function App() {
   const [stage, setStage] = useState<Stage>("search");
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     const stored = window.localStorage.getItem("theme");
-    return stored === "light" ? "light" : "dark";
+    return stored === "dark" ? "dark" : "light";
   });
   const [selectedGameId, setSelectedGameId] = useState(initialSelection.id);
   const [catalog, setCatalog] = useState<CatalogGame[]>([]);
