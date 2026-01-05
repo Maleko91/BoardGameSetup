@@ -1,0 +1,55 @@
+{
+  "id": "azul",
+  "title": "Azul",
+  "playerCounts": [2, 3, 4],
+  "common": [
+    {
+      "order": 1,
+      "text": "Place the factory displays and fill the bag with tiles.",
+      "visual": {
+        "asset": "tile-factories",
+        "animation": "place"
+      }
+    },
+    {
+      "order": 3,
+      "text": "Set the scoring marker and prepare the discard area.",
+      "visual": {
+        "asset": "score-track",
+        "animation": "place"
+      }
+    }
+  ],
+  "byPlayerCount": {
+    "2": [
+      {
+        "order": 2,
+        "text": "Give each player a board, marker, and the first player token.",
+        "visual": {
+          "asset": "player-boards",
+          "animation": "deal"
+        }
+      }
+    ],
+    "3": [
+      {
+        "order": 2,
+        "text": "Give each player a board, marker, and the first player token.",
+        "visual": {
+          "asset": "player-boards",
+          "animation": "deal"
+        }
+      }
+    ],
+    "4": [
+      {
+        "order": 2,
+        "text": "Give each player a board, marker, and the first player token.",
+        "visual": {
+          "asset": "player-boards",
+          "animation": "deal"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "id": "ark-nova",
+  "title": "Ark Nova",
+  "playerCounts": [1, 2, 3, 4],
+  "common": [
+    {
+      "order": 1,
+      "text": "Set up the action card display, conservation board, and token supply.",
+      "visual": {
+        "asset": "action-cards",
+        "animation": "place"
+      }
+    },
+    {
+      "order": 3,
+      "text": "Shuffle the zoo deck and set the initial public cards.",
+      "visual": {
+        "asset": "zoo-cards",
+        "animation": "stack"
+      }
+    }
+  ],
+  "byPlayerCount": {
+    "1": [
+      {
+        "order": 2,
+        "text": "Set up the solo AI deck and give the player a zoo map and starting cards.",
+        "visual": {
+          "asset": "solo-setup",
+          "animation": "deal"
+        }
+      }
+    ],
+    "2": [
+      {
+        "order": 2,
+        "text": "Give each player a zoo map, action cards, and starting cards.",
+        "visual": {
+          "asset": "player-setup",
+          "animation": "deal"
+        }
+      }
+    ],
+    "3": [
+      {
+        "order": 2,
+        "text": "Give each player a zoo map, action cards, and starting cards.",
+        "visual": {
+          "asset": "player-setup",
+          "animation": "deal"
+        }
+      }
+    ],
+    "4": [
+      {
+        "order": 2,
+        "text": "Give each player a zoo map, action cards, and starting cards.",
+        "visual": {
+          "asset": "player-setup",
+          "animation": "deal"
+        }
+      }
+    ]
+  }
+}

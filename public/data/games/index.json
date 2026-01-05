@@ -89,6 +89,96 @@
       "tagline": "Lead an expedition across shifting frontiers.",
       "coverAsset": "vantage-box",
       "coverImage": "images/Vantage.png"
+    },
+    {
+      "id": "terraforming-mars",
+      "title": "Terraforming Mars",
+      "popularity": 89,
+      "players": "1-5",
+      "playtime": "90-120 min",
+      "tagline": "Build corporations to raise oceans, oxygen, and heat.",
+      "coverAsset": "terraforming-mars-box",
+      "coverImage": "images/terraforming-mars.jpg"
+    },
+    {
+      "id": "ticket-to-ride",
+      "title": "Ticket to Ride",
+      "popularity": 87,
+      "players": "2-5",
+      "playtime": "30-60 min",
+      "tagline": "Collect cards and claim rail routes across the map.",
+      "coverAsset": "ticket-to-ride-box",
+      "coverImage": "images/ticket-to-ride.jpeg"
+    },
+    {
+      "id": "azul",
+      "title": "Azul",
+      "popularity": 85,
+      "players": "2-4",
+      "playtime": "30-45 min",
+      "tagline": "Draft tiles to build elegant patterns.",
+      "coverAsset": "azul-box",
+      "coverImage": "images/Azul.jpeg"
+    },
+    {
+      "id": "pandemic",
+      "title": "Pandemic",
+      "popularity": 84,
+      "players": "2-4",
+      "playtime": "45-60 min",
+      "tagline": "Work together to stop global outbreaks.",
+      "coverAsset": "pandemic-box",
+      "coverImage": "images/Pandemic.png"
+    },
+    {
+      "id": "scythe",
+      "title": "Scythe",
+      "popularity": 83,
+      "players": "1-5",
+      "playtime": "90-120 min",
+      "tagline": "Lead a faction across a dieselpunk landscape.",
+      "coverAsset": "scythe-box",
+      "coverImage": "images/Scythe.jpeg"
+    },
+    {
+      "id": "spirit-island",
+      "title": "Spirit Island",
+      "popularity": 82,
+      "players": "1-4",
+      "playtime": "90-120 min",
+      "tagline": "Play spirits defending an island from invaders.",
+      "coverAsset": "spirit-island-box",
+      "coverImage": "images/Spirit-Island.jpeg"
+    },
+    {
+      "id": "root",
+      "title": "Root",
+      "popularity": 81,
+      "players": "2-4",
+      "playtime": "60-90 min",
+      "tagline": "Command asymmetric factions in a woodland war.",
+      "coverAsset": "root-box",
+      "coverImage": "images/Root.jpeg"
+    },
+    {
+      "id": "splendor",
+      "title": "Splendor",
+      "popularity": 80,
+      "players": "2-4",
+      "playtime": "30-45 min",
+      "tagline": "Collect gems and build a prestige engine.",
+      "coverAsset": "splendor-box",
+      "coverImage": "images/Splendor.jpeg"
+    },
+    {
+      "id": "ark-nova",
+      "title": "Ark Nova",
+      "popularity": 79,
+      "players": "1-4",
+      "playtime": "90-150 min",
+      "tagline": "Plan a modern zoo with cards and conservation.",
+      "coverAsset": "ark-nova-box",
+      "coverImage": "images/Ark-Nova.jpeg"
     }
   ]
 }

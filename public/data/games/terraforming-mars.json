@@ -1,0 +1,75 @@
+{
+  "id": "terraforming-mars",
+  "title": "Terraforming Mars",
+  "playerCounts": [1, 2, 3, 4, 5],
+  "common": [
+    {
+      "order": 1,
+      "text": "Set up the Mars board, global parameter tracks, and resource supply.",
+      "visual": {
+        "asset": "mars-board",
+        "animation": "place"
+      }
+    },
+    {
+      "order": 3,
+      "text": "Shuffle the project deck and deal each player a starting hand.",
+      "visual": {
+        "asset": "project-cards",
+        "animation": "deal"
+      }
+    }
+  ],
+  "byPlayerCount": {
+    "1": [
+      {
+        "order": 2,
+        "text": "Set up the solo timer and solo goals before play begins.",
+        "visual": {
+          "asset": "solo-setup",
+          "animation": "place"
+        }
+      }
+    ],
+    "2": [
+      {
+        "order": 2,
+        "text": "Give each player a corporation card and starting resources.",
+        "visual": {
+          "asset": "corporations",
+          "animation": "deal"
+        }
+      }
+    ],
+    "3": [
+      {
+        "order": 2,
+        "text": "Give each player a corporation card and starting resources.",
+        "visual": {
+          "asset": "corporations",
+          "animation": "deal"
+        }
+      }
+    ],
+    "4": [
+      {
+        "order": 2,
+        "text": "Give each player a corporation card and starting resources.",
+        "visual": {
+          "asset": "corporations",
+          "animation": "deal"
+        }
+      }
+    ],
+    "5": [
+      {
+        "order": 2,
+        "text": "Give each player a corporation card and starting resources.",
+        "visual": {
+          "asset": "corporations",
+          "animation": "deal"
+        }
+      }
+    ]
+  }
+}

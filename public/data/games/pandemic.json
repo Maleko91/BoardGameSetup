@@ -1,0 +1,55 @@
+{
+  "id": "pandemic",
+  "title": "Pandemic",
+  "playerCounts": [2, 3, 4],
+  "common": [
+    {
+      "order": 1,
+      "text": "Set up the board, disease cubes, and outbreak marker.",
+      "visual": {
+        "asset": "global-board",
+        "animation": "place"
+      }
+    },
+    {
+      "order": 3,
+      "text": "Prepare the infection deck and place the initial infections.",
+      "visual": {
+        "asset": "infection-deck",
+        "animation": "stack"
+      }
+    }
+  ],
+  "byPlayerCount": {
+    "2": [
+      {
+        "order": 2,
+        "text": "Assign roles and deal starting player cards for two players.",
+        "visual": {
+          "asset": "role-cards",
+          "animation": "deal"
+        }
+      }
+    ],
+    "3": [
+      {
+        "order": 2,
+        "text": "Assign roles and deal starting player cards for three players.",
+        "visual": {
+          "asset": "role-cards",
+          "animation": "deal"
+        }
+      }
+    ],
+    "4": [
+      {
+        "order": 2,
+        "text": "Assign roles and deal starting player cards for four players.",
+        "visual": {
+          "asset": "role-cards",
+          "animation": "deal"
+        }
+      }
+    ]
+  }
+}

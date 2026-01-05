@@ -1,0 +1,65 @@
+{
+  "id": "ticket-to-ride",
+  "title": "Ticket to Ride",
+  "playerCounts": [2, 3, 4, 5],
+  "common": [
+    {
+      "order": 1,
+      "text": "Place the board, train pieces, and route cards within reach.",
+      "visual": {
+        "asset": "route-board",
+        "animation": "place"
+      }
+    },
+    {
+      "order": 3,
+      "text": "Shuffle the train car cards, reveal five face up, and set the draw pile.",
+      "visual": {
+        "asset": "train-cards",
+        "animation": "fan"
+      }
+    }
+  ],
+  "byPlayerCount": {
+    "2": [
+      {
+        "order": 2,
+        "text": "Each player takes a color, collects trains, and draws their starting tickets.",
+        "visual": {
+          "asset": "player-setup",
+          "animation": "deal"
+        }
+      }
+    ],
+    "3": [
+      {
+        "order": 2,
+        "text": "Each player takes a color, collects trains, and draws their starting tickets.",
+        "visual": {
+          "asset": "player-setup",
+          "animation": "deal"
+        }
+      }
+    ],
+    "4": [
+      {
+        "order": 2,
+        "text": "Each player takes a color, collects trains, and draws their starting tickets.",
+        "visual": {
+          "asset": "player-setup",
+          "animation": "deal"
+        }
+      }
+    ],
+    "5": [
+      {
+        "order": 2,
+        "text": "Each player takes a color, collects trains, and draws their starting tickets.",
+        "visual": {
+          "asset": "player-setup",
+          "animation": "deal"
+        }
+      }
+    ]
+  }
+}

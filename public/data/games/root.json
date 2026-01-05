@@ -1,0 +1,55 @@
+{
+  "id": "root",
+  "title": "Root",
+  "playerCounts": [2, 3, 4],
+  "common": [
+    {
+      "order": 1,
+      "text": "Set up the map, clearings, and shared deck.",
+      "visual": {
+        "asset": "root-map",
+        "animation": "place"
+      }
+    },
+    {
+      "order": 3,
+      "text": "Prepare the item supply and shuffle the quest deck.",
+      "visual": {
+        "asset": "items-quests",
+        "animation": "stack"
+      }
+    }
+  ],
+  "byPlayerCount": {
+    "2": [
+      {
+        "order": 2,
+        "text": "Each player selects a faction and places their starting pieces.",
+        "visual": {
+          "asset": "faction-boards",
+          "animation": "place"
+        }
+      }
+    ],
+    "3": [
+      {
+        "order": 2,
+        "text": "Each player selects a faction and places their starting pieces.",
+        "visual": {
+          "asset": "faction-boards",
+          "animation": "place"
+        }
+      }
+    ],
+    "4": [
+      {
+        "order": 2,
+        "text": "Each player selects a faction and places their starting pieces.",
+        "visual": {
+          "asset": "faction-boards",
+          "animation": "place"
+        }
+      }
+    ]
+  }
+}
