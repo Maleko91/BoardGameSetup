@@ -2,7 +2,7 @@
 
 on:
   push:
-    branches: [main]
+    branches: [github-pages]
   workflow_dispatch:
 
 permissions:
