@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { supabase, supabaseReady } from "./lib/supabase";
 
 type Visual = {
   asset: string;
@@ -51,15 +52,11 @@ type CatalogGame = {
   id: string;
   title: string;
   popularity: number;
-  players: string;
-  playtime: string;
+  playersMin: number;
+  playersMax: number;
   tagline?: string;
   coverAsset?: string;
   coverImage?: string;
-};
-
-type CatalogResponse = {
-  games: CatalogGame[];
 };
 
 const DEFAULT_GAME = "cascadia";
@@ -151,20 +148,35 @@ export default function App() {
     setCatalogLoading(true);
     setCatalogError("");
 
-    const url = `${import.meta.env.BASE_URL}data/games/index.json`;
+    if (!supabaseReady || !supabase) {
+      setCatalogError("Missing Supabase configuration.");
+      setCatalogLoading(false);
+      return () => {
+        active = false;
+      };
+    }
 
-    fetch(url)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error("Could not load the game catalog.");
-        }
-        return response.json();
-      })
-      .then((data: CatalogResponse) => {
+    supabase
+      .from("games")
+      .select("id, title, players_min, players_max, popularity, tagline, cover_image")
+      .then(({ data, error }) => {
         if (!active) {
           return;
         }
-        setCatalog(Array.isArray(data.games) ? data.games : []);
+        if (error) {
+          throw new Error(error.message);
+        }
+        const mapped =
+          data?.map((entry) => ({
+            id: entry.id,
+            title: entry.title,
+            popularity: entry.popularity ?? 0,
+            playersMin: entry.players_min,
+            playersMax: entry.players_max,
+            tagline: entry.tagline ?? undefined,
+            coverImage: entry.cover_image ?? undefined
+          })) ?? [];
+        setCatalog(mapped);
       })
       .catch((err: Error) => {
         if (!active) {
@@ -214,33 +226,148 @@ export default function App() {
     setGameLoading(true);
     setGameError("");
 
-    const url = `${import.meta.env.BASE_URL}data/games/${selectedGameId}.json`;
+    if (!supabaseReady || !supabase) {
+      setGameError("Missing Supabase configuration.");
+      setGameLoading(false);
+      return () => {
+        active = false;
+      };
+    }
 
-    fetch(url)
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Could not load game data for "${selectedGameId}".`);
+    const loadGame = async () => {
+      try {
+        const { data: gameRow, error: gameRowError } = await supabase
+          .from("games")
+          .select("id, title, players_min, players_max, rules_url")
+          .eq("id", selectedGameId)
+          .single();
+
+        if (gameRowError || !gameRow) {
+          throw new Error(
+            gameRowError?.message ??
+              `Could not load game data for "${selectedGameId}".`
+          );
         }
-        return response.json();
-      })
-      .then((data: GameData) => {
+
+        const { data: expansions, error: expansionsError } = await supabase
+          .from("expansions")
+          .select("id, name")
+          .eq("game_id", selectedGameId);
+
+        if (expansionsError) {
+          throw new Error(expansionsError.message);
+        }
+
+        const expansionIds = (expansions ?? []).map((expansion) => expansion.id);
+        const { data: modules, error: modulesError } = expansionIds.length
+          ? await supabase
+              .from("expansion_modules")
+              .select("id, expansion_id, name, description")
+              .in("expansion_id", expansionIds)
+          : { data: [], error: null };
+
+        if (modulesError) {
+          throw new Error(modulesError.message);
+        }
+
+        const { data: steps, error: stepsError } = await supabase
+          .from("steps")
+          .select(
+            "step_order, text, visual_asset, visual_animation, player_counts, include_expansions, exclude_expansions, include_modules, exclude_modules, require_no_expansions"
+          )
+          .eq("game_id", selectedGameId)
+          .order("step_order", { ascending: true });
+
+        if (stepsError) {
+          throw new Error(stepsError.message);
+        }
+
+        const playerCounts = Array.from(
+          { length: gameRow.players_max - gameRow.players_min + 1 },
+          (_, index) => gameRow.players_min + index
+        );
+
+        const expansionModules = (modules ?? []).reduce<
+          Record<string, ExpansionModule[]>
+        >((acc, module) => {
+          const list = acc[module.expansion_id] ?? [];
+          list.push({
+            id: module.id,
+            name: module.name,
+            description: module.description ?? undefined
+          });
+          acc[module.expansion_id] = list;
+          return acc;
+        }, {});
+
+        const common: Step[] = [];
+        const conditionalSteps: ConditionalStep[] = [];
+
+        (steps ?? []).forEach((step) => {
+          const when: StepCondition = {};
+          if (step.player_counts?.length) {
+            when.playerCounts = step.player_counts;
+          }
+          if (step.include_expansions?.length) {
+            when.includeExpansions = step.include_expansions;
+          }
+          if (step.exclude_expansions?.length) {
+            when.excludeExpansions = step.exclude_expansions;
+          }
+          if (step.include_modules?.length) {
+            when.includeModules = step.include_modules;
+          }
+          if (step.exclude_modules?.length) {
+            when.excludeModules = step.exclude_modules;
+          }
+          if (step.require_no_expansions) {
+            when.requireNoExpansions = true;
+          }
+
+          const mappedStep: Step = {
+            order: Number(step.step_order),
+            text: step.text,
+            visual: {
+              asset: step.visual_asset ?? "",
+              animation: step.visual_animation ?? ""
+            }
+          };
+
+          if (Object.keys(when).length) {
+            conditionalSteps.push({ ...mappedStep, when });
+          } else {
+            common.push(mappedStep);
+          }
+        });
+
+        const mappedGame: GameData = {
+          id: gameRow.id,
+          title: gameRow.title,
+          playerCounts,
+          expansions: expansions ?? [],
+          common,
+          byPlayerCount: {},
+          conditionalSteps,
+          expansionModules,
+          rulesUrl: gameRow.rules_url ?? undefined
+        };
+
+        if (active) {
+          setGame(mappedGame);
+        }
+      } catch (err) {
         if (!active) {
           return;
         }
-        setGame(data);
-      })
-      .catch((err: Error) => {
-        if (!active) {
-          return;
+        setGameError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (active) {
+          setGameLoading(false);
         }
-        setGameError(err.message);
-      })
-      .finally(() => {
-        if (!active) {
-          return;
-        }
-        setGameLoading(false);
-      });
+      }
+    };
+
+    loadGame();
 
     return () => {
       active = false;
@@ -468,21 +595,13 @@ export default function App() {
         })
       : catalog;
 
-    const getMaxPlayers = (value: string) => {
-      const matches = value.match(/\d+/g);
-      if (!matches) {
-        return 0;
-      }
-      return Math.max(...matches.map((entry) => Number(entry)));
-    };
-
     const sorted = [...filtered].sort((a, b) => {
       switch (sortOption) {
         case "alpha":
           return a.title.localeCompare(b.title);
         case "max-players":
           return (
-            getMaxPlayers(b.players) - getMaxPlayers(a.players) ||
+            b.playersMax - a.playersMax ||
             a.title.localeCompare(b.title)
           );
         case "popularity":
@@ -514,6 +633,19 @@ export default function App() {
   );
 
   const showPagination = visibleGames.length > PAGE_SIZE;
+
+  const formatPlayers = (min: number, max: number) =>
+    min === max ? `${min}` : `${min}-${max}`;
+
+  const resolveCoverImage = (path?: string) => {
+    if (!path) {
+      return "";
+    }
+    if (path.startsWith("http://") || path.startsWith("https://")) {
+      return path;
+    }
+    return getPublicAssetUrl(path);
+  };
 
   useEffect(() => {
     if (stage !== "search") {
@@ -752,7 +884,7 @@ const summarizeStep = (text: string) => {
                 <div className="game-cover">
                   {entry.coverImage ? (
                     <img
-                      src={getPublicAssetUrl(entry.coverImage)}
+                      src={resolveCoverImage(entry.coverImage)}
                       alt={`${entry.title} cover`}
                       loading="lazy"
                     />
@@ -765,7 +897,7 @@ const summarizeStep = (text: string) => {
                 <div className="game-card-body">
                   <div className="game-card-title">{entry.title}</div>
                   <div className="game-card-meta">
-                    {entry.players} players
+                    {formatPlayers(entry.playersMin, entry.playersMax)} players
                   </div>
                   {entry.tagline && (
                     <div className="game-card-tagline">{entry.tagline}</div>
