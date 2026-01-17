@@ -156,10 +156,15 @@ export default function App() {
       };
     }
 
-    supabase
-      .from("games")
-      .select("id, title, players_min, players_max, popularity, tagline, cover_image")
-      .then(({ data, error }) => {
+    const client = supabase;
+    const loadCatalog = async () => {
+      try {
+        const { data, error } = await client
+          .from("games")
+          .select(
+            "id, title, players_min, players_max, popularity, tagline, cover_image"
+          );
+
         if (!active) {
           return;
         }
@@ -177,19 +182,20 @@ export default function App() {
             coverImage: entry.cover_image ?? undefined
           })) ?? [];
         setCatalog(mapped);
-      })
-      .catch((err: Error) => {
+      } catch (err) {
         if (!active) {
           return;
         }
-        setCatalogError(err.message);
-      })
-      .finally(() => {
+        setCatalogError(err instanceof Error ? err.message : String(err));
+      } finally {
         if (!active) {
           return;
         }
         setCatalogLoading(false);
-      });
+      }
+    };
+
+    loadCatalog();
 
     return () => {
       active = false;
@@ -234,9 +240,10 @@ export default function App() {
       };
     }
 
+    const client = supabase;
     const loadGame = async () => {
       try {
-        const { data: gameRow, error: gameRowError } = await supabase
+        const { data: gameRow, error: gameRowError } = await client
           .from("games")
           .select("id, title, players_min, players_max, rules_url")
           .eq("id", selectedGameId)
@@ -249,7 +256,7 @@ export default function App() {
           );
         }
 
-        const { data: expansions, error: expansionsError } = await supabase
+        const { data: expansions, error: expansionsError } = await client
           .from("expansions")
           .select("id, name")
           .eq("game_id", selectedGameId);
@@ -260,7 +267,7 @@ export default function App() {
 
         const expansionIds = (expansions ?? []).map((expansion) => expansion.id);
         const { data: modules, error: modulesError } = expansionIds.length
-          ? await supabase
+          ? await client
               .from("expansion_modules")
               .select("id, expansion_id, name, description")
               .in("expansion_id", expansionIds)
@@ -270,7 +277,7 @@ export default function App() {
           throw new Error(modulesError.message);
         }
 
-        const { data: steps, error: stepsError } = await supabase
+        const { data: steps, error: stepsError } = await client
           .from("steps")
           .select(
             "step_order, text, visual_asset, visual_animation, player_counts, include_expansions, exclude_expansions, include_modules, exclude_modules, require_no_expansions"
