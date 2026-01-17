@@ -834,6 +834,11 @@ h1 {
   overflow-y: auto;
 }
 
+.steps-table .admin-table-body {
+  max-height: none;
+  overflow: visible;
+}
+
 .expansions-table .admin-table-header,
 .expansions-table .admin-table-row {
   grid-template-columns: 1.4fr 1fr var(--table-action-size);

@@ -1,6 +1,7 @@
 import {
   Fragment,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -264,6 +265,12 @@ export default function AdminApp() {
   const [stepMessage, setStepMessage] = useState("");
   const [stepAssetUploading, setStepAssetUploading] = useState(false);
   const [stepAssetDeleting, setStepAssetDeleting] = useState(false);
+  const [stepsBodyMaxHeight, setStepsBodyMaxHeight] = useState<number | null>(
+    null
+  );
+  const stepsHeaderRef = useRef<HTMLDivElement | null>(null);
+  const stepsRowRef = useRef<HTMLDivElement | null>(null);
+  const stepsFormRef = useRef<HTMLDivElement | null>(null);
 
   const userEmail = session?.user?.email ?? "";
 
@@ -597,6 +604,7 @@ export default function AdminApp() {
     setStepsReordering(false);
     setDraggedStepId(null);
     setDragOverStepId(null);
+    setStepsBodyMaxHeight(null);
   }, [selectedGameId]);
 
   useEffect(() => {
@@ -1227,6 +1235,22 @@ export default function AdminApp() {
     [steps]
   );
 
+  useLayoutEffect(() => {
+    if (sortedSteps.length <= 10) {
+      setStepsBodyMaxHeight(null);
+      return;
+    }
+    const headerHeight = stepsHeaderRef.current?.offsetHeight ?? 0;
+    const rowHeight = stepsRowRef.current?.offsetHeight ?? 0;
+    const formHeight =
+      stepFormOpen && stepsFormRef.current ? stepsFormRef.current.offsetHeight : 0;
+    if (!rowHeight) {
+      setStepsBodyMaxHeight(null);
+      return;
+    }
+    setStepsBodyMaxHeight(headerHeight + rowHeight * 10 + formHeight);
+  }, [sortedSteps.length, stepFormOpen, selectedStepId, stepForm]);
+
   const filteredGames = useMemo(() => {
     const term = gameSearchTerm.trim().toLowerCase();
     if (!term) {
@@ -1299,7 +1323,7 @@ export default function AdminApp() {
       ? "New step"
       : `Editing: Step ${stepForm.step_order || "?"}`;
   const renderStepForm = () => (
-    <div className="steps-inline-form">
+    <div className="steps-inline-form" ref={stepsFormRef}>
       <div className="admin-form-header">
         <strong>{stepFormLabel}</strong>
         <button
@@ -2362,8 +2386,15 @@ export default function AdminApp() {
                 {stepsError && <div className="status error">{stepsError}</div>}
 
                 <div className="admin-table steps-table">
-                  <div className="admin-table-body">
-                    <div className="admin-table-header">
+                  <div
+                    className="admin-table-body"
+                    style={
+                      stepsBodyMaxHeight
+                        ? { maxHeight: `${stepsBodyMaxHeight}px`, overflowY: "auto" }
+                        : undefined
+                    }
+                  >
+                    <div className="admin-table-header" ref={stepsHeaderRef}>
                       <span className="table-col-center">Move</span>
                       <span className="table-col-center">Order</span>
                       <span className="table-col-start">Step</span>
@@ -2372,7 +2403,7 @@ export default function AdminApp() {
                     {stepFormOpen && stepMode === "create" && !selectedStepId
                       ? renderStepForm()
                       : null}
-                    {sortedSteps.map((step) => {
+                    {sortedSteps.map((step, index) => {
                       const isExpanded =
                         stepFormOpen && selectedStepId === step.id;
                       return (
@@ -2383,6 +2414,7 @@ export default function AdminApp() {
                             } ${draggedStepId === step.id ? "is-dragging" : ""} ${
                               dragOverStepId === step.id ? "is-drop-target" : ""
                             }`}
+                            ref={index === 0 ? stepsRowRef : undefined}
                             draggable={!stepsReordering}
                             onDragStart={(event) => handleStepDragStart(event, step.id)}
                             onDragOver={(event) => handleStepDragOver(event, step.id)}
