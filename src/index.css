@@ -878,6 +878,62 @@ h1 {
   background: rgba(233, 240, 221, 0.7);
 }
 
+.step-matrix {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 12px;
+  background: rgba(20, 16, 28, 0.65);
+}
+
+:root[data-theme="light"] .step-matrix {
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.step-matrix-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 80px 80px;
+  gap: 8px;
+  align-items: center;
+}
+
+.step-matrix-header {
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.step-matrix-section {
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin-top: 6px;
+}
+
+.step-matrix-label {
+  font-weight: 600;
+}
+
+.step-matrix-check {
+  display: flex;
+  justify-content: center;
+}
+
+.step-matrix-check input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.step-matrix-empty {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
 .admin-table-action {
   justify-self: end;
   text-align: right;

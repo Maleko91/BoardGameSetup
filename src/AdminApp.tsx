@@ -46,8 +46,6 @@ type StepRow = {
   game_id: string;
   step_order: number;
   text: string;
-  visual_asset: string | null;
-  visual_animation: string | null;
   player_counts: number[] | null;
   include_expansions: string[] | null;
   exclude_expansions: string[] | null;
@@ -82,8 +80,6 @@ type StepForm = {
   id: string;
   step_order: string;
   text: string;
-  visual_asset: string;
-  visual_animation: string;
   player_counts: string;
   include_expansions: string;
   exclude_expansions: string;
@@ -118,8 +114,6 @@ const emptyStepForm = (): StepForm => ({
   id: "",
   step_order: "",
   text: "",
-  visual_asset: "",
-  visual_animation: "",
   player_counts: "",
   include_expansions: "",
   exclude_expansions: "",
@@ -153,6 +147,18 @@ const splitNumberCsv = (value: string) =>
 
 const joinCsv = (values?: Array<string | number> | null) =>
   values && values.length ? values.join(", ") : "";
+
+const updateCsvList = (value: string, id: string, checked: boolean) => {
+  const entries = splitCsv(value);
+  const hasEntry = entries.includes(id);
+  if (checked && !hasEntry) {
+    return [...entries, id].join(", ");
+  }
+  if (!checked && hasEntry) {
+    return entries.filter((entry) => entry !== id).join(", ");
+  }
+  return entries.join(", ");
+};
 
 const optionalString = (value: string) => {
   const trimmed = value.trim();
@@ -263,8 +269,6 @@ export default function AdminApp() {
   const [stepMode, setStepMode] = useState<"create" | "edit">("create");
   const [stepForm, setStepForm] = useState<StepForm>(() => emptyStepForm());
   const [stepMessage, setStepMessage] = useState("");
-  const [stepAssetUploading, setStepAssetUploading] = useState(false);
-  const [stepAssetDeleting, setStepAssetDeleting] = useState(false);
   const [stepsBodyMaxHeight, setStepsBodyMaxHeight] = useState<number | null>(
     null
   );
@@ -432,7 +436,7 @@ export default function AdminApp() {
       const { data, error } = await client
         .from("steps")
         .select(
-          "id, game_id, step_order, text, visual_asset, visual_animation, player_counts, include_expansions, exclude_expansions, include_modules, exclude_modules, require_no_expansions"
+          "id, game_id, step_order, text, player_counts, include_expansions, exclude_expansions, include_modules, exclude_modules, require_no_expansions"
         )
         .eq("game_id", gameId)
         .order("step_order", { ascending: true });
@@ -626,8 +630,6 @@ export default function AdminApp() {
       id: selected.id,
       step_order: String(selected.step_order ?? ""),
       text: selected.text ?? "",
-      visual_asset: selected.visual_asset ?? "",
-      visual_animation: selected.visual_animation ?? "",
       player_counts: joinCsv(selected.player_counts),
       include_expansions: joinCsv(selected.include_expansions),
       exclude_expansions: joinCsv(selected.exclude_expansions),
@@ -720,25 +722,6 @@ export default function AdminApp() {
     }
   };
 
-  const handleStepAssetUpload = async (event: ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) {
-      return;
-    }
-    setStepAssetUploading(true);
-    setStepMessage("");
-    try {
-      const url = await uploadImage(file, "step-assets");
-      setStepForm((current) => ({ ...current, visual_asset: url }));
-      setStepMessage("Step asset uploaded.");
-    } catch (err) {
-      setStepMessage(err instanceof Error ? err.message : String(err));
-    } finally {
-      setStepAssetUploading(false);
-      event.target.value = "";
-    }
-  };
-
   const handleDeleteCoverImage = async () => {
     const url = gameForm.cover_image.trim();
     if (!url) {
@@ -772,44 +755,6 @@ export default function AdminApp() {
       setGameMessage(err instanceof Error ? err.message : String(err));
     } finally {
       setGameCoverDeleting(false);
-    }
-  };
-
-  const handleDeleteStepAsset = async () => {
-    const url = stepForm.visual_asset.trim();
-    if (!url) {
-      setStepMessage("No step asset to delete.");
-      return;
-    }
-    if (!window.confirm("Remove this step asset from storage?")) {
-      return;
-    }
-    if (!supabaseReady || !supabase) {
-      setStepMessage("Missing Supabase configuration.");
-      return;
-    }
-    setStepAssetDeleting(true);
-    setStepMessage("");
-    try {
-      await deleteStorageObjectFromUrl(url);
-      if (stepMode === "edit" && stepForm.id) {
-        const { error } = await supabase
-          .from("steps")
-          .update({ visual_asset: null })
-          .eq("id", stepForm.id);
-        if (error) {
-          throw error;
-        }
-        if (selectedGameId) {
-          await loadSteps(selectedGameId);
-        }
-      }
-      setStepForm((current) => ({ ...current, visual_asset: "" }));
-      setStepMessage("Step asset removed.");
-    } catch (err) {
-      setStepMessage(err instanceof Error ? err.message : String(err));
-    } finally {
-      setStepAssetDeleting(false);
     }
   };
 
@@ -1101,8 +1046,6 @@ export default function AdminApp() {
       game_id: selectedGameId,
       step_order: orderValue,
       text,
-      visual_asset: optionalString(stepForm.visual_asset),
-      visual_animation: optionalString(stepForm.visual_animation),
       player_counts: splitNumberCsv(stepForm.player_counts),
       include_expansions: splitCsv(stepForm.include_expansions),
       exclude_expansions: splitCsv(stepForm.exclude_expansions),
@@ -1235,8 +1178,113 @@ export default function AdminApp() {
     [steps]
   );
 
+  const visibleSteps = useMemo(() => {
+    const hasExpansion = Boolean(selectedExpansionId);
+    const hasModule = Boolean(selectedModuleId);
+    return sortedSteps.filter((step) => {
+      if (step.require_no_expansions && hasExpansion) {
+        return false;
+      }
+      if (step.include_expansions?.length) {
+        if (!hasExpansion || !step.include_expansions.includes(selectedExpansionId)) {
+          return false;
+        }
+      }
+      if (
+        step.exclude_expansions?.length &&
+        hasExpansion &&
+        step.exclude_expansions.includes(selectedExpansionId)
+      ) {
+        return false;
+      }
+      if (step.include_modules?.length) {
+        if (!hasModule || !step.include_modules.includes(selectedModuleId)) {
+          return false;
+        }
+      }
+      if (
+        step.exclude_modules?.length &&
+        hasModule &&
+        step.exclude_modules.includes(selectedModuleId)
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [selectedExpansionId, selectedModuleId, sortedSteps]);
+
+  const stepIncludeExpansions = useMemo(
+    () => new Set(splitCsv(stepForm.include_expansions)),
+    [stepForm.include_expansions]
+  );
+
+  const stepExcludeExpansions = useMemo(
+    () => new Set(splitCsv(stepForm.exclude_expansions)),
+    [stepForm.exclude_expansions]
+  );
+
+  const stepIncludeModules = useMemo(
+    () => new Set(splitCsv(stepForm.include_modules)),
+    [stepForm.include_modules]
+  );
+
+  const stepExcludeModules = useMemo(
+    () => new Set(splitCsv(stepForm.exclude_modules)),
+    [stepForm.exclude_modules]
+  );
+
+  const handleToggleExpansionInclude = (id: string, checked: boolean) => {
+    setStepForm((current) => ({
+      ...current,
+      include_expansions: updateCsvList(current.include_expansions, id, checked),
+      exclude_expansions: checked
+        ? updateCsvList(current.exclude_expansions, id, false)
+        : current.exclude_expansions
+    }));
+  };
+
+  const handleToggleExpansionExclude = (id: string, checked: boolean) => {
+    setStepForm((current) => ({
+      ...current,
+      exclude_expansions: updateCsvList(current.exclude_expansions, id, checked),
+      include_expansions: checked
+        ? updateCsvList(current.include_expansions, id, false)
+        : current.include_expansions
+    }));
+  };
+
+  const handleToggleModuleInclude = (id: string, checked: boolean) => {
+    setStepForm((current) => ({
+      ...current,
+      include_modules: updateCsvList(current.include_modules, id, checked),
+      exclude_modules: checked
+        ? updateCsvList(current.exclude_modules, id, false)
+        : current.exclude_modules
+    }));
+  };
+
+  const handleToggleModuleExclude = (id: string, checked: boolean) => {
+    setStepForm((current) => ({
+      ...current,
+      exclude_modules: updateCsvList(current.exclude_modules, id, checked),
+      include_modules: checked
+        ? updateCsvList(current.include_modules, id, false)
+        : current.include_modules
+    }));
+  };
+
+  useEffect(() => {
+    if (!selectedStepId) {
+      return;
+    }
+    if (!visibleSteps.some((step) => step.id === selectedStepId)) {
+      setSelectedStepId("");
+      setStepFormOpen(false);
+    }
+  }, [selectedStepId, visibleSteps]);
+
   useLayoutEffect(() => {
-    if (sortedSteps.length <= 10) {
+    if (visibleSteps.length <= 10) {
       setStepsBodyMaxHeight(null);
       return;
     }
@@ -1249,7 +1297,7 @@ export default function AdminApp() {
       return;
     }
     setStepsBodyMaxHeight(headerHeight + rowHeight * 10 + formHeight);
-  }, [sortedSteps.length, stepFormOpen, selectedStepId, stepForm]);
+  }, [stepFormOpen, visibleSteps.length, selectedStepId, stepForm]);
 
   const filteredGames = useMemo(() => {
     const term = gameSearchTerm.trim().toLowerCase();
@@ -1357,40 +1405,6 @@ export default function AdminApp() {
             rows={3}
           />
         </label>
-        <label className="form-field full-width">
-          <span>Visual asset URL</span>
-          <input
-            value={stepForm.visual_asset}
-            onChange={(event) =>
-              setStepForm({ ...stepForm, visual_asset: event.target.value })
-            }
-            placeholder="https://..."
-          />
-        </label>
-        <label className="form-field full-width">
-          <span>Upload step asset</span>
-          <input type="file" accept="image/*" onChange={handleStepAssetUpload} />
-        </label>
-        <div className="admin-actions full-width">
-          <button
-            type="button"
-            className="btn ghost"
-            onClick={handleDeleteStepAsset}
-            disabled={!stepForm.visual_asset || stepAssetUploading || stepAssetDeleting}
-          >
-            Remove step asset
-          </button>
-        </div>
-        <label className="form-field">
-          <span>Visual animation</span>
-          <input
-            value={stepForm.visual_animation}
-            onChange={(event) =>
-              setStepForm({ ...stepForm, visual_animation: event.target.value })
-            }
-            placeholder="fade-in"
-          />
-        </label>
         <label className="form-field">
           <span>Player counts</span>
           <input
@@ -1401,46 +1415,73 @@ export default function AdminApp() {
             placeholder="2,3,4"
           />
         </label>
-        <label className="form-field">
-          <span>Include expansions</span>
-          <input
-            value={stepForm.include_expansions}
-            onChange={(event) =>
-              setStepForm({ ...stepForm, include_expansions: event.target.value })
-            }
-            placeholder="expansion-id"
-          />
-        </label>
-        <label className="form-field">
-          <span>Exclude expansions</span>
-          <input
-            value={stepForm.exclude_expansions}
-            onChange={(event) =>
-              setStepForm({ ...stepForm, exclude_expansions: event.target.value })
-            }
-            placeholder="expansion-id"
-          />
-        </label>
-        <label className="form-field">
-          <span>Include modules</span>
-          <input
-            value={stepForm.include_modules}
-            onChange={(event) =>
-              setStepForm({ ...stepForm, include_modules: event.target.value })
-            }
-            placeholder="module-id"
-          />
-        </label>
-        <label className="form-field">
-          <span>Exclude modules</span>
-          <input
-            value={stepForm.exclude_modules}
-            onChange={(event) =>
-              setStepForm({ ...stepForm, exclude_modules: event.target.value })
-            }
-            placeholder="module-id"
-          />
-        </label>
+        <div className="step-matrix">
+          <div className="step-matrix-row step-matrix-header">
+            <span aria-hidden="true" />
+            <span>Include</span>
+            <span>Exclude</span>
+          </div>
+          <div className="step-matrix-section">Expansions</div>
+          {expansions.length > 0 ? (
+            expansions.map((expansion) => (
+              <div key={expansion.id} className="step-matrix-row">
+                <span className="step-matrix-label">{expansion.name}</span>
+                <label className="step-matrix-check">
+                  <input
+                    type="checkbox"
+                    checked={stepIncludeExpansions.has(expansion.id)}
+                    onChange={(event) =>
+                      handleToggleExpansionInclude(expansion.id, event.target.checked)
+                    }
+                  />
+                </label>
+                <label className="step-matrix-check">
+                  <input
+                    type="checkbox"
+                    checked={stepExcludeExpansions.has(expansion.id)}
+                    onChange={(event) =>
+                      handleToggleExpansionExclude(expansion.id, event.target.checked)
+                    }
+                  />
+                </label>
+              </div>
+            ))
+          ) : (
+            <div className="step-matrix-empty">No expansions for this game.</div>
+          )}
+          <div className="step-matrix-section">Modules</div>
+          {modules.length > 0 ? (
+            modules.map((module) => (
+              <div key={module.id} className="step-matrix-row">
+                <span className="step-matrix-label">{module.name}</span>
+                <label className="step-matrix-check">
+                  <input
+                    type="checkbox"
+                    checked={stepIncludeModules.has(module.id)}
+                    onChange={(event) =>
+                      handleToggleModuleInclude(module.id, event.target.checked)
+                    }
+                  />
+                </label>
+                <label className="step-matrix-check">
+                  <input
+                    type="checkbox"
+                    checked={stepExcludeModules.has(module.id)}
+                    onChange={(event) =>
+                      handleToggleModuleExclude(module.id, event.target.checked)
+                    }
+                  />
+                </label>
+              </div>
+            ))
+          ) : (
+            <div className="step-matrix-empty">
+              {selectedExpansionId
+                ? "No modules for this expansion."
+                : "Select an expansion to see modules."}
+            </div>
+          )}
+        </div>
         <label className="form-field checkbox-field">
           <input
             type="checkbox"
@@ -1455,7 +1496,7 @@ export default function AdminApp() {
           <span>Require no expansions</span>
         </label>
         <div className="admin-actions full-width">
-          <button type="submit" className="btn primary" disabled={stepAssetUploading}>
+          <button type="submit" className="btn primary">
             {stepMode === "create" ? "Create step" : "Save step"}
           </button>
           <button
@@ -1468,8 +1509,6 @@ export default function AdminApp() {
           </button>
         </div>
       </form>
-      {stepAssetUploading && <div className="status">Uploading asset...</div>}
-      {stepAssetDeleting && <div className="status">Removing asset...</div>}
     </div>
   );
 
@@ -2403,7 +2442,7 @@ export default function AdminApp() {
                     {stepFormOpen && stepMode === "create" && !selectedStepId
                       ? renderStepForm()
                       : null}
-                    {sortedSteps.map((step, index) => {
+                    {visibleSteps.map((step, index) => {
                       const isExpanded =
                         stepFormOpen && selectedStepId === step.id;
                       return (
@@ -2466,7 +2505,7 @@ export default function AdminApp() {
                     })}
                     {!stepsLoading &&
                       !stepsError &&
-                      sortedSteps.length === 0 &&
+                      visibleSteps.length === 0 &&
                       !(stepFormOpen && stepMode === "create") && (
                         <div className="empty-state compact">No steps yet.</div>
                       )}
@@ -2474,7 +2513,7 @@ export default function AdminApp() {
                 </div>
 
                 <div className="games-footer">
-                  <div className="games-count">Showing {sortedSteps.length} steps</div>
+                  <div className="games-count">Showing {visibleSteps.length} steps</div>
                   {stepsReordering && <div className="status">Saving order...</div>}
                 </div>
                 {stepMessage && <div className="status">{stepMessage}</div>}
