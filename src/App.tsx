@@ -1,4 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent
+} from "react";
+import type { Session } from "@supabase/supabase-js";
 import { supabase, supabaseReady } from "./lib/supabase";
 
 type Visual = {
@@ -59,12 +68,24 @@ type CatalogGame = {
   coverImage?: string;
 };
 
+type UserProfileRow = {
+  id: string;
+  email: string | null;
+  display_name: string | null;
+  is_admin: boolean | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 const DEFAULT_GAME = "cascadia";
 const PAGE_SIZE = 12;
+const PROFILE_SELECT =
+  "id, email, display_name, is_admin, created_at, updated_at";
 const SORT_OPTIONS = ["popularity", "alpha", "max-players"] as const;
 type SortOption = (typeof SORT_OPTIONS)[number];
 
 type Stage = "search" | "steps";
+type Page = "home" | "request" | "profile";
 
 type InitialSelection = {
   id: string;
@@ -83,29 +104,82 @@ const getInitialSelection = (): InitialSelection => {
   return { id: trimmed, explicit: true };
 };
 
-const buildUrl = (gameId?: string | null) => {
+const getPageFromUrl = (): Page => {
+  const param = new URLSearchParams(window.location.search).get("page");
+  if (param === "request") {
+    return "request";
+  }
+  if (param === "profile") {
+    return "profile";
+  }
+  return "home";
+};
+
+type BuildUrlOptions = {
+  gameId?: string | null;
+  page?: Page | null;
+};
+
+const buildUrl = ({ gameId = null, page = null }: BuildUrlOptions = {}) => {
   const url = new URL(window.location.href);
   if (gameId) {
     url.searchParams.set("game", gameId);
   } else {
     url.searchParams.delete("game");
   }
+  if (page && page !== "home") {
+    url.searchParams.set("page", page);
+  } else {
+    url.searchParams.delete("page");
+  }
   return url;
 };
 
 const replaceSearchState = () => {
-  const url = buildUrl(null);
-  window.history.replaceState({ stage: "search" }, "", url.toString());
+  const url = buildUrl({ page: "home", gameId: null });
+  window.history.replaceState(
+    { page: "home", stage: "search" },
+    "",
+    url.toString()
+  );
 };
 
 const replaceGameState = (gameId: string) => {
-  const url = buildUrl(gameId);
-  window.history.replaceState({ stage: "steps", game: gameId }, "", url.toString());
+  const url = buildUrl({ page: "home", gameId });
+  window.history.replaceState(
+    { page: "home", stage: "steps", game: gameId },
+    "",
+    url.toString()
+  );
 };
 
 const pushGameState = (gameId: string) => {
-  const url = buildUrl(gameId);
-  window.history.pushState({ stage: "steps", game: gameId }, "", url.toString());
+  const url = buildUrl({ page: "home", gameId });
+  window.history.pushState(
+    { page: "home", stage: "steps", game: gameId },
+    "",
+    url.toString()
+  );
+};
+
+const replaceRequestState = () => {
+  const url = buildUrl({ page: "request", gameId: null });
+  window.history.replaceState({ page: "request" }, "", url.toString());
+};
+
+const pushRequestState = () => {
+  const url = buildUrl({ page: "request", gameId: null });
+  window.history.pushState({ page: "request" }, "", url.toString());
+};
+
+const replaceProfileState = () => {
+  const url = buildUrl({ page: "profile", gameId: null });
+  window.history.replaceState({ page: "profile" }, "", url.toString());
+};
+
+const pushProfileState = () => {
+  const url = buildUrl({ page: "profile", gameId: null });
+  window.history.pushState({ page: "profile" }, "", url.toString());
 };
 
 const getPublicAssetUrl = (path: string) =>
@@ -121,11 +195,30 @@ const resolveGameId = (candidate: string, games: CatalogGame[]) => {
 
 export default function App() {
   const initialSelection = useMemo(() => getInitialSelection(), []);
+  const initialPage = useMemo(() => getPageFromUrl(), []);
+  const [page, setPage] = useState<Page>(initialPage);
   const [stage, setStage] = useState<Stage>("search");
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     const stored = window.localStorage.getItem("theme");
     return stored === "dark" ? "dark" : "light";
   });
+  const [session, setSession] = useState<Session | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authDisplayName, setAuthDisplayName] = useState("");
+  const [authError, setAuthError] = useState("");
+  const [authNotice, setAuthNotice] = useState("");
+  const [userProfile, setUserProfile] = useState<UserProfileRow | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileNameTouched, setProfileNameTouched] = useState(false);
+  const [profileName, setProfileName] = useState("");
+  const [profileError, setProfileError] = useState("");
+  const [profileNotice, setProfileNotice] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileDeleting, setProfileDeleting] = useState(false);
   const [selectedGameId, setSelectedGameId] = useState(initialSelection.id);
   const [catalog, setCatalog] = useState<CatalogGame[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
@@ -141,7 +234,233 @@ export default function App() {
   const [playerIndex, setPlayerIndex] = useState(0);
   const [currentPage, setCurrentPage] = useState(1);
   const [sortOption, setSortOption] = useState<SortOption>("popularity");
-  const gameGridRef = useRef<HTMLDivElement | null>(null);
+  const navRef = useRef<HTMLElement | null>(null);
+  const authTabsRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!supabaseReady || !supabase) {
+      setAuthError("Missing Supabase configuration.");
+      setAuthLoading(false);
+      return;
+    }
+    const client = supabase;
+    let active = true;
+
+    client.auth
+      .getSession()
+      .then(({ data, error }) => {
+        if (!active) {
+          return;
+        }
+        if (error) {
+          setAuthError(error.message);
+        }
+        setSession(data.session ?? null);
+      })
+      .finally(() => {
+        if (active) {
+          setAuthLoading(false);
+        }
+      });
+
+    const { data: listener } = client.auth.onAuthStateChange(
+      (_event, nextSession) => {
+        setSession(nextSession);
+      }
+    );
+
+    return () => {
+      active = false;
+      listener.subscription.unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!session) {
+      setUserProfile(null);
+      setProfileName("");
+      setProfileNameTouched(false);
+      setProfileError("");
+      setProfileNotice("");
+      setProfileDeleting(false);
+      return;
+    }
+    setProfileError("");
+    setProfileNotice("");
+    setProfileNameTouched(false);
+    setProfileDeleting(false);
+    setAuthPassword("");
+  }, [session]);
+
+  useEffect(() => {
+    if (profileNameTouched) {
+      return;
+    }
+    const displayName =
+      userProfile?.display_name ??
+      session?.user?.user_metadata?.display_name ??
+      session?.user?.user_metadata?.full_name ??
+      "";
+    setProfileName(displayName);
+  }, [profileNameTouched, session, userProfile]);
+
+  useEffect(() => {
+    if (!supabaseReady || !supabase) {
+      setProfileLoading(false);
+      return;
+    }
+    if (!session?.user) {
+      setUserProfile(null);
+      setProfileLoading(false);
+      return;
+    }
+
+    let active = true;
+    setProfileLoading(true);
+    setProfileError("");
+
+    const userId = session.user.id;
+    const userEmail = session.user.email ?? null;
+    const fallbackName =
+      session.user.user_metadata?.display_name ??
+      session.user.user_metadata?.full_name ??
+      null;
+
+    const loadProfile = async () => {
+      const { data, error } = await supabase
+        .from("users")
+        .select(PROFILE_SELECT)
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (!active) {
+        return;
+      }
+      if (error) {
+        setProfileError(error.message);
+        setProfileLoading(false);
+        return;
+      }
+      if (data) {
+        setUserProfile(data);
+        setProfileLoading(false);
+        return;
+      }
+
+      const { data: created, error: createError } = await supabase
+        .from("users")
+        .upsert(
+          {
+            id: userId,
+            email: userEmail,
+            display_name: fallbackName
+          },
+          { onConflict: "id" }
+        )
+        .select(PROFILE_SELECT)
+        .single();
+
+      if (!active) {
+        return;
+      }
+      if (createError) {
+        setProfileError(createError.message);
+        setProfileLoading(false);
+        return;
+      }
+      setUserProfile(created);
+      setProfileLoading(false);
+    };
+
+    loadProfile();
+
+    return () => {
+      active = false;
+    };
+  }, [session]);
+
+  const updateAuthHighlight = useCallback((target: HTMLElement | null) => {
+    const tabs = authTabsRef.current;
+    if (!tabs) {
+      return;
+    }
+    if (!target) {
+      tabs.style.setProperty("--auth-highlight-opacity", "0");
+      return;
+    }
+    const tabsRect = tabs.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const left = targetRect.left - tabsRect.left;
+    tabs.style.setProperty("--auth-highlight-left", `${left}px`);
+    tabs.style.setProperty("--auth-highlight-width", `${targetRect.width}px`);
+    tabs.style.setProperty("--auth-highlight-opacity", "1");
+  }, []);
+
+  const resetAuthHighlight = useCallback(() => {
+    const tabs = authTabsRef.current;
+    if (!tabs) {
+      return;
+    }
+    const active = tabs.querySelector<HTMLElement>(".auth-tab.active");
+    updateAuthHighlight(active);
+  }, [updateAuthHighlight]);
+
+  useLayoutEffect(() => {
+    if (page !== "profile" || session || authLoading) {
+      return;
+    }
+    resetAuthHighlight();
+  }, [authLoading, authMode, page, resetAuthHighlight, session]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      resetAuthHighlight();
+    };
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [resetAuthHighlight]);
+
+  const updateNavUnderline = useCallback((target: HTMLElement | null) => {
+    const nav = navRef.current;
+    if (!nav) {
+      return;
+    }
+    if (!target) {
+      nav.style.setProperty("--nav-underline-opacity", "0");
+      return;
+    }
+    const navRect = nav.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const left = targetRect.left - navRect.left;
+    nav.style.setProperty("--nav-underline-left", `${left}px`);
+    nav.style.setProperty("--nav-underline-width", `${targetRect.width}px`);
+    nav.style.setProperty("--nav-underline-opacity", "1");
+  }, []);
+
+  const resetNavUnderline = useCallback(() => {
+    const nav = navRef.current;
+    if (!nav) {
+      return;
+    }
+    const active = nav.querySelector<HTMLElement>(".nav-link.active");
+    updateNavUnderline(active);
+  }, [updateNavUnderline]);
+
+  useLayoutEffect(() => {
+    resetNavUnderline();
+  }, [page, resetNavUnderline]);
+
+  useEffect(() => {
+    const handleResize = () => {
+      resetNavUnderline();
+    };
+    window.addEventListener("resize", handleResize);
+    return () => {
+      window.removeEventListener("resize", handleResize);
+    };
+  }, [resetNavUnderline]);
 
   useEffect(() => {
     let active = true;
@@ -208,8 +527,16 @@ export default function App() {
   }, [theme]);
 
   useEffect(() => {
+    if (initialPage === "request") {
+      replaceRequestState();
+      return;
+    }
+    if (initialPage === "profile") {
+      replaceProfileState();
+      return;
+    }
     replaceSearchState();
-  }, []);
+  }, [initialPage]);
 
   useEffect(() => {
     if (!catalog.length) {
@@ -218,11 +545,11 @@ export default function App() {
     const resolved = resolveGameId(selectedGameId, catalog);
     if (resolved !== selectedGameId) {
       setSelectedGameId(resolved);
-      if (stage === "steps") {
+      if (page === "home" && stage === "steps") {
         replaceGameState(resolved);
       }
     }
-  }, [catalog, selectedGameId, stage]);
+  }, [catalog, page, selectedGameId, stage]);
 
   useEffect(() => {
     if (!selectedGameId) {
@@ -394,7 +721,7 @@ export default function App() {
 
   useEffect(() => {
     setExpansionMenuOpen(false);
-  }, [stage]);
+  }, [page, stage]);
 
   useEffect(() => {
     if (!game?.expansionModules) {
@@ -411,7 +738,23 @@ export default function App() {
 
   useEffect(() => {
     const handlePopState = (event: PopStateEvent) => {
-      const state = event.state as { stage?: Stage; game?: string | null } | null;
+      const state = event.state as {
+        stage?: Stage;
+        game?: string | null;
+        page?: Page | null;
+      } | null;
+      const nextPage = state?.page ?? getPageFromUrl();
+      if (nextPage === "request") {
+        setPage("request");
+        setStage("search");
+        return;
+      }
+      if (nextPage === "profile") {
+        setPage("profile");
+        setStage("search");
+        return;
+      }
+      setPage("home");
       if (state?.stage === "steps" && state.game) {
         setSelectedGameId(state.game);
         setStage("steps");
@@ -654,37 +997,13 @@ export default function App() {
     return getPublicAssetUrl(path);
   };
 
-  useEffect(() => {
-    if (stage !== "search") {
-      return;
-    }
-    const grid = gameGridRef.current;
-    if (!grid) {
-      return;
-    }
-    let frame = 0;
-    const updateCardHeight = () => {
-      const cards = Array.from(grid.querySelectorAll<HTMLElement>(".game-card"));
-      if (!cards.length) {
-        grid.style.removeProperty("--game-card-height");
-        return;
-      }
-      grid.style.removeProperty("--game-card-height");
-      const maxHeight = Math.max(
-        ...cards.map((card) => card.getBoundingClientRect().height)
-      );
-      const paddedHeight = Math.ceil(maxHeight + 16);
-      grid.style.setProperty("--game-card-height", `${paddedHeight}px`);
-    };
-    frame = window.requestAnimationFrame(updateCardHeight);
-    window.addEventListener("resize", updateCardHeight);
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("resize", updateCardHeight);
-    };
-  }, [paginatedGames, stage]);
-
   const stageTitle = useMemo(() => {
+    if (page === "request") {
+      return "Request a game";
+    }
+    if (page === "profile") {
+      return session ? "Your profile" : "Sign in";
+    }
     switch (stage) {
       case "search":
         return "Setup and Play";
@@ -693,9 +1012,17 @@ export default function App() {
       default:
         return "Board Game Setups";
     }
-  }, [stage]);
+  }, [page, session, stage]);
 
   const stageSubtitle = useMemo(() => {
+    if (page === "request") {
+      return "";
+    }
+    if (page === "profile") {
+      return session
+        ? "Update your display name and manage your account."
+        : "Create an account or sign in to save your profile.";
+    }
     switch (stage) {
       case "search":
         return "Search the library and tap a game to begin.";
@@ -704,21 +1031,209 @@ export default function App() {
       default:
         return "";
     }
-  }, [stage, selectedCatalogGame, playerCount]);
+  }, [page, session, stage]);
+  const currentYear = new Date().getFullYear();
+  const profileEmail = userProfile?.email ?? session?.user?.email ?? "";
+  const isAdmin = Boolean(userProfile?.is_admin);
 
   const handleSelectGame = (id: string) => {
+    setPage("home");
     setSelectedGameId(id);
     setStage("steps");
     pushGameState(id);
   };
 
   const handleGoHome = () => {
+    setPage("home");
     setStage("search");
     replaceSearchState();
   };
 
+  const handleGoRequest = () => {
+    setPage("request");
+    setStage("search");
+    pushRequestState();
+  };
+
+  const handleGoProfile = () => {
+    setPage("profile");
+    setStage("search");
+    pushProfileState();
+  };
+
   const handleToggleTheme = () => {
     setTheme((current) => (current === "dark" ? "light" : "dark"));
+  };
+
+  const handleAuthModeChange = (mode: "login" | "signup") => {
+    setAuthMode(mode);
+    setAuthError("");
+    setAuthNotice("");
+    if (mode === "login") {
+      setAuthDisplayName("");
+    }
+  };
+
+  const handleAuthSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setAuthError("");
+    setAuthNotice("");
+
+    if (!supabaseReady || !supabase) {
+      setAuthError("Missing Supabase configuration.");
+      return;
+    }
+
+    const email = authEmail.trim();
+    const password = authPassword;
+    if (!email || !password) {
+      setAuthError("Email and password are required.");
+      return;
+    }
+
+    setAuthSubmitting(true);
+    try {
+      if (authMode === "login") {
+        const { error } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        });
+        if (error) {
+          throw error;
+        }
+        setAuthNotice("Signed in.");
+      } else {
+        const displayName = authDisplayName.trim();
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: displayName ? { data: { display_name: displayName } } : undefined
+        });
+        if (error) {
+          throw error;
+        }
+        if (data.session) {
+          setAuthNotice("Account created.");
+        } else {
+          setAuthNotice("Check your email to confirm your account.");
+        }
+      }
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setAuthSubmitting(false);
+    }
+  };
+
+  const handleSignOut = async () => {
+    setAuthError("");
+    setAuthNotice("");
+    if (!supabaseReady || !supabase) {
+      setAuthError("Missing Supabase configuration.");
+      return;
+    }
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      setAuthError(error.message);
+      return;
+    }
+    setSession(null);
+    setAuthMode("login");
+    setAuthNotice("Signed out.");
+  };
+
+  const handleProfileSave = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setProfileError("");
+    setProfileNotice("");
+
+    if (!supabaseReady || !supabase) {
+      setProfileError("Missing Supabase configuration.");
+      return;
+    }
+    if (!session?.user) {
+      setProfileError("No active session.");
+      return;
+    }
+
+    const displayName = profileName.trim();
+    const currentName = userProfile?.display_name ?? "";
+    if (displayName === currentName) {
+      setProfileNotice("No changes to save.");
+      return;
+    }
+
+    setProfileSaving(true);
+    try {
+      const { data, error } = await supabase
+        .from("users")
+        .upsert(
+          {
+            id: session.user.id,
+            email: session.user.email ?? userProfile?.email ?? null,
+            display_name: displayName || null
+          },
+          { onConflict: "id" }
+        )
+        .select(PROFILE_SELECT)
+        .single();
+      if (error) {
+        throw error;
+      }
+      setUserProfile(data);
+      setProfileNameTouched(false);
+
+      const { error: authError } = await supabase.auth.updateUser({
+        data: { display_name: displayName || null }
+      });
+      if (authError) {
+        setProfileNotice("Profile saved, but auth metadata failed to update.");
+        return;
+      }
+      setProfileNotice("Profile updated.");
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const handleDeleteAccount = async () => {
+    setProfileError("");
+    setProfileNotice("");
+    setAuthNotice("");
+
+    if (!supabaseReady || !supabase) {
+      setProfileError("Missing Supabase configuration.");
+      return;
+    }
+    if (!session?.user) {
+      setProfileError("No active session.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "This will permanently delete your account and profile. This cannot be undone. Continue?"
+    );
+    if (!confirmed) {
+      return;
+    }
+
+    setProfileDeleting(true);
+    try {
+      const { error } = await supabase.rpc("delete_account");
+      if (error) {
+        throw error;
+      }
+      await supabase.auth.signOut();
+      setSession(null);
+      setUserProfile(null);
+      setAuthNotice("Account deleted.");
+    } catch (err) {
+      setProfileError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setProfileDeleting(false);
+    }
   };
 
   const goToPage = (page: number) => {
@@ -825,25 +1340,59 @@ const summarizeStep = (text: string) => {
   return (
     <div className="app">
       <header className="masthead">
-        <div className="brand-row">
-          <button type="button" className="eyebrow brand-button" onClick={handleGoHome}>
-            Board Game Setups
-          </button>
-          <button
-            type="button"
-            className="theme-toggle"
-            onClick={handleToggleTheme}
-            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            data-next={theme === "dark" ? "light" : "dark"}
-          >
-            {theme === "dark" ? "Light Mode" : "Dark Mode"}
-          </button>
+        <div className="title-row">
+          <div className="nav-row">
+            <nav
+              ref={navRef}
+              className="site-nav"
+              aria-label="Primary"
+              onMouseLeave={resetNavUnderline}
+            >
+              <span className="nav-underline" aria-hidden="true" />
+              <button
+                type="button"
+                className={page === "home" ? "nav-link active" : "nav-link"}
+                onClick={handleGoHome}
+                aria-current={page === "home" ? "page" : undefined}
+                onMouseEnter={(event) => updateNavUnderline(event.currentTarget)}
+              >
+                Home
+              </button>
+              <button
+                type="button"
+                className={page === "request" ? "nav-link active" : "nav-link"}
+                onClick={handleGoRequest}
+                aria-current={page === "request" ? "page" : undefined}
+                onMouseEnter={(event) => updateNavUnderline(event.currentTarget)}
+              >
+                Request a game
+              </button>
+              <button
+                type="button"
+                className={page === "profile" ? "nav-link active" : "nav-link"}
+                onClick={handleGoProfile}
+                aria-current={page === "profile" ? "page" : undefined}
+                onMouseEnter={(event) => updateNavUnderline(event.currentTarget)}
+              >
+                Profile
+              </button>
+            </nav>
+            <button
+              type="button"
+              className="theme-toggle"
+              onClick={handleToggleTheme}
+              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+              data-next={theme === "dark" ? "light" : "dark"}
+            >
+              {theme === "dark" ? "Light Mode" : "Dark Mode"}
+            </button>
+          </div>
+          <h1>{stageTitle}</h1>
         </div>
-        <h1>{stageTitle}</h1>
         {stageSubtitle ? <p className="subtitle">{stageSubtitle}</p> : null}
       </header>
 
-      {stage === "search" && (
+      {page === "home" && stage === "search" && (
         <section className="stage">
           <div className="panel search-panel">
             <label className="search-label" htmlFor="game-search">
@@ -875,7 +1424,7 @@ const summarizeStep = (text: string) => {
           {catalogLoading && <div className="status">Loading games...</div>}
           {catalogError && <div className="status error">{catalogError}</div>}
 
-          <div className="game-grid" ref={gameGridRef}>
+          <div className="game-grid">
             {paginatedGames.map((entry) => (
               <button
                 key={entry.id}
@@ -922,7 +1471,7 @@ const summarizeStep = (text: string) => {
         </section>
       )}
 
-      {stage === "steps" && (
+      {page === "home" && stage === "steps" && (
         <section className="stage">
           <div className="panel summary-panel">
             <div className="summary-row">
@@ -1068,13 +1617,175 @@ const summarizeStep = (text: string) => {
                 Rules
               </button>
             )}
-            <button type="button" className="btn primary" onClick={() => setStage("search")}
-            >
+            <button type="button" className="btn primary" onClick={handleGoHome}>
               Choose another game
             </button>
           </div>
         </section>
       )}
+
+      {page === "profile" && (
+        <section className="stage">
+          {!supabaseReady && (
+            <div className="status error">Missing Supabase configuration.</div>
+          )}
+          {supabaseReady && authLoading && (
+            <div className="status">Checking session...</div>
+          )}
+          {supabaseReady && !authLoading && session && (
+            <div className="panel profile-panel">
+              <div className="profile-header">
+                <div className="profile-meta">
+                  <span className="eyebrow">Signed in</span>
+                  <span className="profile-email">{profileEmail}</span>
+                </div>
+                <div className="profile-actions">
+                  {isAdmin && (
+                    <a className="btn ghost small" href="#/admin">
+                      Admin panel
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    className="btn ghost small"
+                    onClick={handleSignOut}
+                  >
+                    Sign out
+                  </button>
+                </div>
+              </div>
+              {profileLoading && (
+                <div className="status">Loading profile...</div>
+              )}
+              <form className="profile-form" onSubmit={handleProfileSave}>
+                <label className="form-field">
+                  <span>Display name</span>
+                  <input
+                    type="text"
+                    value={profileName}
+                    onChange={(event) => {
+                      setProfileName(event.target.value);
+                      setProfileNameTouched(true);
+                    }}
+                    placeholder="Add a display name"
+                    autoComplete="name"
+                  />
+                </label>
+                <button
+                  type="submit"
+                  className="btn primary"
+                  disabled={profileSaving || profileLoading || profileDeleting}
+                >
+                  {profileSaving ? "Saving..." : "Save profile"}
+                </button>
+              </form>
+              <div className="profile-footer">
+                <button
+                  type="button"
+                  className="btn ghost small danger"
+                  onClick={handleDeleteAccount}
+                  disabled={profileDeleting || profileLoading}
+                >
+                  {profileDeleting ? "Deleting..." : "Delete account"}
+                </button>
+              </div>
+              {profileError && <div className="status error">{profileError}</div>}
+              {profileNotice && <div className="status">{profileNotice}</div>}
+            </div>
+          )}
+          {supabaseReady && !authLoading && !session && (
+            <div className="panel auth-panel">
+              <div className="auth-header">
+                <div className="auth-tabs" ref={authTabsRef}>
+                  <span className="auth-highlight" aria-hidden="true" />
+                  <button
+                    type="button"
+                    className={authMode === "login" ? "auth-tab active" : "auth-tab"}
+                    onClick={() => handleAuthModeChange("login")}
+                    aria-pressed={authMode === "login"}
+                  >
+                    Sign in
+                  </button>
+                  <button
+                    type="button"
+                    className={authMode === "signup" ? "auth-tab active" : "auth-tab"}
+                    onClick={() => handleAuthModeChange("signup")}
+                    aria-pressed={authMode === "signup"}
+                  >
+                    Create account
+                  </button>
+                </div>
+                <p className="hint">
+                  Sign in to save your profile settings across devices.
+                </p>
+              </div>
+              <form className="auth-form" onSubmit={handleAuthSubmit}>
+                {authMode === "signup" && (
+                  <label className="form-field">
+                    <span>Display name (optional)</span>
+                    <input
+                      type="text"
+                      value={authDisplayName}
+                      onChange={(event) => setAuthDisplayName(event.target.value)}
+                      placeholder="How should we call you?"
+                      autoComplete="name"
+                    />
+                  </label>
+                )}
+                <label className="form-field">
+                  <span>Email</span>
+                  <input
+                    type="email"
+                    value={authEmail}
+                    onChange={(event) => setAuthEmail(event.target.value)}
+                    placeholder="you@email.com"
+                    autoComplete="email"
+                    required
+                  />
+                </label>
+                <label className="form-field">
+                  <span>Password</span>
+                  <input
+                    type="password"
+                    value={authPassword}
+                    onChange={(event) => setAuthPassword(event.target.value)}
+                    autoComplete={authMode === "login" ? "current-password" : "new-password"}
+                    required
+                  />
+                </label>
+                <button
+                  type="submit"
+                  className="btn primary"
+                  disabled={authSubmitting}
+                >
+                  {authSubmitting
+                    ? "Working..."
+                    : authMode === "login"
+                      ? "Sign in"
+                      : "Create account"}
+                </button>
+              </form>
+              {authError && <div className="status error">{authError}</div>}
+              {authNotice && <div className="status">{authNotice}</div>}
+            </div>
+          )}
+        </section>
+      )}
+
+      {page === "request" && (
+        <section className="stage">
+          <div className="empty-state">Request form coming soon.</div>
+        </section>
+      )}
+
+      <footer className="site-footer">
+        <p>Copyright {currentYear} Board Game Setups.</p>
+        <p>
+          Board game titles, artwork, and trademarks belong to their respective
+          owners. This fan-made site provides setup guidance and is not
+          affiliated with any publisher.
+        </p>
+      </footer>
     </div>
   );
 }

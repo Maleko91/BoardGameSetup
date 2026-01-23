@@ -16,6 +16,7 @@ const IMAGE_BUCKET = "Card images";
 const GAME_PAGE_SIZE = 8;
 const EXPANSION_PAGE_SIZE = 8;
 const MODULE_PAGE_SIZE = 8;
+const ADMIN_SELECT = "id, email, display_name, is_admin";
 
 type GameRow = {
   id: string;
@@ -52,6 +53,13 @@ type StepRow = {
   include_modules: string[] | null;
   exclude_modules: string[] | null;
   require_no_expansions: boolean | null;
+};
+
+type AdminUserRow = {
+  id: string;
+  email: string | null;
+  display_name: string | null;
+  is_admin: boolean | null;
 };
 
 type GameForm = {
@@ -236,7 +244,7 @@ export default function AdminApp() {
   const [draggedStepId, setDraggedStepId] = useState<string | null>(null);
   const [dragOverStepId, setDragOverStepId] = useState<string | null>(null);
 
-  const [admins, setAdmins] = useState<string[]>([]);
+  const [admins, setAdmins] = useState<AdminUserRow[]>([]);
   const [adminEmailInput, setAdminEmailInput] = useState("");
   const [adminsMessage, setAdminsMessage] = useState("");
 
@@ -277,6 +285,7 @@ export default function AdminApp() {
   const stepsFormRef = useRef<HTMLDivElement | null>(null);
 
   const userEmail = session?.user?.email ?? "";
+  const userId = session?.user?.id ?? "";
 
   useEffect(() => {
     if (!supabaseReady || !supabase) {
@@ -320,7 +329,7 @@ export default function AdminApp() {
     if (!supabaseReady || !supabase) {
       return;
     }
-    if (!userEmail) {
+    if (!userId) {
       setAdminState("idle");
       setAdminError("");
       return;
@@ -331,9 +340,9 @@ export default function AdminApp() {
     setAdminError("");
 
     client
-      .from("admins")
-      .select("email")
-      .eq("email", userEmail)
+      .from("users")
+      .select("is_admin")
+      .eq("id", userId)
       .maybeSingle()
       .then(({ data, error }) => {
         if (!active) {
@@ -344,13 +353,13 @@ export default function AdminApp() {
           setAdminState("unauthorized");
           return;
         }
-        setAdminState(data ? "authorized" : "unauthorized");
+        setAdminState(data?.is_admin ? "authorized" : "unauthorized");
       });
 
     return () => {
       active = false;
     };
-  }, [userEmail]);
+  }, [userId]);
 
   const loadGames = async () => {
     if (!supabaseReady || !supabase) {
@@ -459,16 +468,14 @@ export default function AdminApp() {
     setAdminsMessage("");
     try {
       const { data, error } = await client
-        .from("admins")
-        .select("email")
+        .from("users")
+        .select(ADMIN_SELECT)
+        .eq("is_admin", true)
         .order("email", { ascending: true });
       if (error) {
         throw error;
       }
-      const emails = (data ?? [])
-        .map((entry) => entry.email)
-        .filter(Boolean) as string[];
-      setAdmins(emails);
+      setAdmins((data ?? []) as AdminUserRow[]);
     } catch (err) {
       setAdminsMessage(err instanceof Error ? err.message : String(err));
     }
@@ -1136,18 +1143,37 @@ export default function AdminApp() {
       setAdminsMessage("Missing Supabase configuration.");
       return;
     }
-    const email = normalizeText(adminEmailInput);
+    const email = normalizeText(adminEmailInput).toLowerCase();
     if (!email) {
       setAdminsMessage("Enter an email address.");
       return;
     }
     const client = supabase;
     try {
-      const { error } = await client.from("admins").insert({ email });
+      const { data, error } = await client
+        .from("users")
+        .select("id, email, is_admin")
+        .ilike("email", email)
+        .maybeSingle();
       if (error) {
         throw error;
       }
-      setAdminsMessage("Admin added.");
+      if (!data) {
+        setAdminsMessage("User not found. Ask them to sign up first.");
+        return;
+      }
+      if (data.is_admin) {
+        setAdminsMessage("That account is already an admin.");
+        return;
+      }
+      const { error: updateError } = await client
+        .from("users")
+        .update({ is_admin: true })
+        .eq("id", data.id);
+      if (updateError) {
+        throw updateError;
+      }
+      setAdminsMessage("Admin access granted.");
       setAdminEmailInput("");
       await loadAdmins();
     } catch (err) {
@@ -1155,18 +1181,21 @@ export default function AdminApp() {
     }
   };
 
-  const handleRemoveAdmin = async (email: string) => {
+  const handleRemoveAdmin = async (adminId: string) => {
     if (!supabaseReady || !supabase) {
       setAdminsMessage("Missing Supabase configuration.");
       return;
     }
     const client = supabase;
     try {
-      const { error } = await client.from("admins").delete().eq("email", email);
+      const { error } = await client
+        .from("users")
+        .update({ is_admin: false })
+        .eq("id", adminId);
       if (error) {
         throw error;
       }
-      setAdminsMessage("Admin removed.");
+      setAdminsMessage("Admin access removed.");
       await loadAdmins();
     } catch (err) {
       setAdminsMessage(err instanceof Error ? err.message : String(err));
@@ -1790,8 +1819,8 @@ export default function AdminApp() {
         <div className="panel admin-panel">
           <h2>Access denied</h2>
           <p className="hint">
-            Your account is signed in as {userEmail}, but it is not listed in the
-            admins table.
+            Your account is signed in as {userEmail}, but it is not marked as an
+            admin user.
           </p>
           {adminError && <div className="status error">{adminError}</div>}
           <div className="admin-actions">
@@ -1808,12 +1837,12 @@ export default function AdminApp() {
             <h2>Admin access</h2>
             <form className="games-toolbar" onSubmit={handleAddAdmin}>
               <label className="form-field games-search">
-                <span>Admin email</span>
+                <span>User email</span>
                 <input
                   type="email"
                   value={adminEmailInput}
                   onChange={(event) => setAdminEmailInput(event.target.value)}
-                  placeholder="new.admin@email.com"
+                  placeholder="existing.user@email.com"
                 />
               </label>
               <button type="submit" className="btn ghost small">
@@ -1823,14 +1852,18 @@ export default function AdminApp() {
             {adminsMessage && <div className="status">{adminsMessage}</div>}
             {admins.length > 0 && (
               <div className="admin-list">
-                {admins.map((email) => (
-                  <div key={email} className="admin-list-row">
-                    <span>{email}</span>
+                {admins.map((admin) => (
+                  <div key={admin.id} className="admin-list-row">
+                    <span>
+                      {admin.display_name
+                        ? `${admin.display_name} - ${admin.email ?? "no email"}`
+                        : admin.email ?? admin.id}
+                    </span>
                     <button
                       type="button"
                       className="btn ghost small"
-                      onClick={() => handleRemoveAdmin(email)}
-                      disabled={email === userEmail}
+                      onClick={() => handleRemoveAdmin(admin.id)}
+                      disabled={admin.id === userId}
                     >
                       Remove
                     </button>
