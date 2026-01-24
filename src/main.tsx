@@ -1,37 +1,51 @@
-﻿import { StrictMode, useEffect, useState } from "react";
+import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import App from "./App";
+import { Navigate, RouterProvider, createBrowserRouter } from "react-router-dom";
 import AdminApp from "./AdminApp";
+import App from "./App";
+import GameSetupPage from "./pages/GameSetupPage";
+import HomePage from "./pages/HomePage";
+import ProfilePage from "./pages/ProfilePage";
+import RequestPage from "./pages/RequestPage";
 import "./index.css";
 
 const storedTheme = window.localStorage.getItem("theme");
 const initialTheme = storedTheme === "dark" ? "dark" : "light";
 document.documentElement.dataset.theme = initialTheme;
 
-const getRoute = () => {
-  const hashRoute = window.location.hash.replace("#", "");
-  if (hashRoute.startsWith("/admin")) {
-    return "admin";
+const hashPath = window.location.hash.replace("#", "");
+if (hashPath.startsWith("/")) {
+  const [pathPart, queryPart] = hashPath.split("?");
+  const normalized = pathPart === "" ? "/" : pathPart;
+  const isKnownRoute =
+    normalized === "/" ||
+    normalized.startsWith("/admin") ||
+    normalized.startsWith("/profile") ||
+    normalized.startsWith("/request") ||
+    normalized.startsWith("/game/");
+  if (isKnownRoute) {
+    const nextUrl = queryPart ? `${normalized}?${queryPart}` : normalized;
+    window.history.replaceState(null, "", nextUrl);
   }
-  if (window.location.pathname.endsWith("/admin")) {
-    return "admin";
-  }
-  return "app";
-};
+}
 
-const Root = () => {
-  const [route, setRoute] = useState(() => getRoute());
-
-  useEffect(() => {
-    const handleChange = () => setRoute(getRoute());
-    window.addEventListener("hashchange", handleChange);
-    return () => {
-      window.removeEventListener("hashchange", handleChange);
-    };
-  }, []);
-
-  return route === "admin" ? <AdminApp /> : <App />;
-};
+const router = createBrowserRouter(
+  [
+    {
+      path: "/",
+      element: <App />,
+      children: [
+        { index: true, element: <HomePage /> },
+        { path: "game/:gameId", element: <GameSetupPage /> },
+        { path: "profile", element: <ProfilePage /> },
+        { path: "request", element: <RequestPage /> }
+      ]
+    },
+    { path: "/admin/*", element: <AdminApp /> },
+    { path: "*", element: <Navigate to="/" replace /> }
+  ],
+  { basename: import.meta.env.BASE_URL }
+);
 
 const container = document.getElementById("root");
 
@@ -41,6 +55,6 @@ if (!container) {
 
 createRoot(container).render(
   <StrictMode>
-    <Root />
+    <RouterProvider router={router} />
   </StrictMode>
 );

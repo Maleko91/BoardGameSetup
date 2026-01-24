@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts"],"version":"5.9.3"}
+{"root":["./src/adminapp.tsx","./src/app.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/context/catalogcontext.tsx","./src/context/sessioncontext.tsx","./src/lib/supabase.ts","./src/pages/gamesetuppage.tsx","./src/pages/homepage.tsx","./src/pages/profilepage.tsx","./src/pages/requestpage.tsx","./src/types/game.ts"],"version":"5.9.3"}
