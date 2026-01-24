@@ -207,6 +207,35 @@ const extractStoragePath = (url: string, bucket: string) => {
   }
 };
 
+const toStoragePath = (value: string | null | undefined, bucket: string) => {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const extracted = extractStoragePath(trimmed, bucket);
+  if (extracted) {
+    return extracted;
+  }
+  if (!trimmed.startsWith("http")) {
+    return trimmed.replace(/^\/+/, "");
+  }
+  return null;
+};
+
+const collectStoragePaths = (
+  values: Array<string | null | undefined>,
+  bucket: string
+) => {
+  const paths = new Set<string>();
+  values.forEach((value) => {
+    const path = toStoragePath(value, bucket);
+    if (path) {
+      paths.add(path);
+    }
+  });
+  return Array.from(paths);
+};
+
 export default function AdminApp() {
   const location = useLocation();
   const [theme, setTheme] = useState<"dark" | "light">(() => {
@@ -824,12 +853,16 @@ export default function AdminApp() {
     </header>
   );
 
-  const uploadImage = async (file: File, folder: string) => {
+  const uploadImage = async (file: File, folder: string, existingUrl?: string) => {
     if (!supabaseReady || !supabase) {
       throw new Error("Missing Supabase configuration.");
     }
     const client = supabase;
-    const path = buildUploadPath(folder, file);
+    const trimmedUrl = existingUrl?.trim();
+    const existingPath = trimmedUrl
+      ? extractStoragePath(trimmedUrl, IMAGE_BUCKET)
+      : null;
+    const path = existingPath ?? buildUploadPath(folder, file);
     const { error } = await client.storage
       .from(IMAGE_BUCKET)
       .upload(path, file, { upsert: true });
@@ -863,7 +896,7 @@ export default function AdminApp() {
     setGameCoverUploading(true);
     setGameMessage("");
     try {
-      const url = await uploadImage(file, "game-covers");
+      const url = await uploadImage(file, "game-covers", gameForm.cover_image);
       setGameForm((current) => ({ ...current, cover_image: url }));
       setGameMessage("Cover image uploaded.");
     } catch (err) {
@@ -953,7 +986,12 @@ export default function AdminApp() {
         }
         setGameMessage("Game created.");
       } else {
-        const { error } = await client
+        const updateId = selectedGameId || payload.id;
+        if (!updateId) {
+          setGameMessage("Select a game before saving changes.");
+          return;
+        }
+        const { data, error } = await client
           .from("games")
           .update({
             title: payload.title,
@@ -964,9 +1002,15 @@ export default function AdminApp() {
             cover_image: payload.cover_image,
             rules_url: payload.rules_url
           })
-          .eq("id", payload.id);
+          .eq("id", updateId)
+          .select("id")
+          .maybeSingle();
         if (error) {
           throw error;
+        }
+        if (!data) {
+          setGameMessage("No rows updated. Check permissions or the game id.");
+          return;
         }
         setGameMessage("Game updated.");
       }
@@ -985,17 +1029,100 @@ export default function AdminApp() {
       setGameMessage("Select a game first.");
       return;
     }
+    if (
+      !window.confirm(
+        `Delete the game "${gameForm.title || selectedGameId}"? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
     if (!supabaseReady || !supabase) {
       setGameMessage("Missing Supabase configuration.");
       return;
     }
     const client = supabase;
+    setGameMessage("");
     try {
-      const { error } = await client.from("games").delete().eq("id", selectedGameId);
+      const { data: expansions, error: expansionsError } = await client
+        .from("expansions")
+        .select("id")
+        .eq("game_id", selectedGameId);
+      if (expansionsError) {
+        throw expansionsError;
+      }
+      const expansionIds = (expansions ?? []).map((expansion) => expansion.id);
+
+      const { data: stepAssets, error: stepAssetsError } = await client
+        .from("steps")
+        .select("visual_asset, visual_animation")
+        .eq("game_id", selectedGameId);
+      if (stepAssetsError) {
+        throw stepAssetsError;
+      }
+
+      const assetPaths = collectStoragePaths(
+        [
+          gameForm.cover_image,
+          ...(stepAssets ?? []).map((asset) => asset.visual_asset),
+          ...(stepAssets ?? []).map((asset) => asset.visual_animation)
+        ],
+        IMAGE_BUCKET
+      );
+
+      if (expansionIds.length) {
+        const { error: modulesError } = await client
+          .from("expansion_modules")
+          .delete()
+          .in("expansion_id", expansionIds);
+        if (modulesError) {
+          throw modulesError;
+        }
+      }
+
+      const { error: stepsError } = await client
+        .from("steps")
+        .delete()
+        .eq("game_id", selectedGameId);
+      if (stepsError) {
+        throw stepsError;
+      }
+
+      const { error: expansionsDeleteError } = await client
+        .from("expansions")
+        .delete()
+        .eq("game_id", selectedGameId);
+      if (expansionsDeleteError) {
+        throw expansionsDeleteError;
+      }
+
+      const { data, error } = await client
+        .from("games")
+        .delete()
+        .eq("id", selectedGameId)
+        .select("id")
+        .maybeSingle();
       if (error) {
         throw error;
       }
-      setGameMessage("Game deleted.");
+      if (!data) {
+        setGameMessage("No rows deleted. Check permissions or the game id.");
+        return;
+      }
+
+      if (assetPaths.length) {
+        const { error: storageError } = await client.storage
+          .from(IMAGE_BUCKET)
+          .remove(assetPaths);
+        if (storageError) {
+          setGameMessage(
+            "Game deleted, but some storage assets could not be removed."
+          );
+        } else {
+          setGameMessage("Game deleted.");
+        }
+      } else {
+        setGameMessage("Game deleted.");
+      }
       setGameMode("create");
       setGameForm(emptyGameForm());
       setSelectedGameId("");
