@@ -107,7 +107,8 @@ export default function HomePage() {
     setCatalogError("");
     setGames([]);
 
-    if (!supabaseReady || !supabase) {
+    const client = supabase;
+    if (!supabaseReady || !client) {
       setCatalogError("Missing Supabase configuration.");
       setCatalogLoading(false);
       return () => {
@@ -117,7 +118,7 @@ export default function HomePage() {
 
     const loadGames = async () => {
       try {
-        let query = supabase
+        let query = client
           .from("games")
           .select(
             "id, title, players_min, players_max, popularity, tagline, cover_image",
