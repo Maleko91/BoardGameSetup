@@ -3,6 +3,7 @@ import type { Session } from "@supabase/supabase-js";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import AdminApp from "../AdminApp";
+import { SessionProvider } from "../context/SessionContext";
 import { supabaseMock, supabaseMockState } from "../test/supabaseMock";
 
 const seedAdminData = () => {
@@ -50,6 +51,15 @@ const seedAdminData = () => {
   });
 };
 
+const renderAdminApp = () =>
+  render(
+    <SessionProvider>
+      <MemoryRouter initialEntries={["/admin"]}>
+        <AdminApp />
+      </MemoryRouter>
+    </SessionProvider>
+  );
+
 describe("AdminApp", () => {
   beforeEach(() => {
     supabaseMock.reset();
@@ -74,11 +84,7 @@ describe("AdminApp", () => {
     });
 
     const user = userEvent.setup();
-    render(
-      <MemoryRouter initialEntries={["/admin"]}>
-        <AdminApp />
-      </MemoryRouter>
-    );
+    renderAdminApp();
 
     const gameRow = await screen.findByText("Game One");
     await user.click(gameRow);
@@ -133,11 +139,7 @@ describe("AdminApp", () => {
     });
 
     const user = userEvent.setup();
-    render(
-      <MemoryRouter initialEntries={["/admin"]}>
-        <AdminApp />
-      </MemoryRouter>
-    );
+    renderAdminApp();
 
     const gameRow = await screen.findByText("Game One");
     await user.click(gameRow);
@@ -200,11 +202,7 @@ describe("AdminApp", () => {
     });
 
     const user = userEvent.setup();
-    render(
-      <MemoryRouter initialEntries={["/admin"]}>
-        <AdminApp />
-      </MemoryRouter>
-    );
+    renderAdminApp();
 
     const gameRow = await screen.findByText("Game One");
     await user.click(gameRow);

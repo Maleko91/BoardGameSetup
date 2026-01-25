@@ -11,12 +11,29 @@ type QueryResponse = {
 type ResponseQueues = Record<string, Record<string, QueryResponse[]>>;
 type PayloadQueues = Record<string, Record<string, unknown[]>>;
 
+type AuthOp =
+  | "signInWithPassword"
+  | "signUp"
+  | "resetPasswordForEmail"
+  | "updateUser"
+  | "signOut";
+
+type AuthResponse = {
+  data?: { session?: Session | null } | null;
+  error: { message: string } | null;
+};
+
+type AuthResponseQueues = Partial<Record<AuthOp, AuthResponse[]>>;
+type RpcResponseQueues = Record<string, QueryResponse[]>;
+
 type SupabaseMockState = {
   ready: boolean;
   authSession: Session | null;
   authListeners: Set<AuthChangeCallback>;
   responses: ResponseQueues;
   payloads: PayloadQueues;
+  authResponses: AuthResponseQueues;
+  rpcResponses: RpcResponseQueues;
   client: SupabaseClientMock;
 };
 
@@ -27,12 +44,14 @@ type QueryOp =
   | "range"
   | "insert"
   | "update"
+  | "upsert"
   | "delete";
 
 type QueryBuilderMock = {
   select: () => QueryBuilderMock;
   insert: (payload: unknown) => QueryBuilderMock;
   update: (payload: unknown) => QueryBuilderMock;
+  upsert: (payload: unknown) => QueryBuilderMock;
   delete: () => QueryBuilderMock;
   eq: () => QueryBuilderMock;
   order: () => QueryBuilderMock;
@@ -53,8 +72,24 @@ type SupabaseClientMock = {
     onAuthStateChange: (
       callback: AuthChangeCallback
     ) => { data: { subscription: { unsubscribe: () => void } } };
+    signInWithPassword: (payload: {
+      email: string;
+      password: string;
+    }) => Promise<AuthResponse>;
+    signUp: (payload: {
+      email: string;
+      password: string;
+      options?: { data?: Record<string, unknown> };
+    }) => Promise<AuthResponse>;
+    resetPasswordForEmail: (
+      email: string,
+      options?: { redirectTo?: string }
+    ) => Promise<AuthResponse>;
+    updateUser: (payload: unknown) => Promise<AuthResponse>;
+    signOut: () => Promise<AuthResponse>;
   };
   from: (table: string) => QueryBuilderMock;
+  rpc: (fn: string) => Promise<QueryResponse>;
 };
 
 const defaultResponse = (op: QueryOp): QueryResponse => {
@@ -63,6 +98,13 @@ const defaultResponse = (op: QueryOp): QueryResponse => {
   }
   if (op === "select") {
     return { data: [], error: null };
+  }
+  return { data: null, error: null };
+};
+
+const defaultAuthResponse = (op: AuthOp): AuthResponse => {
+  if (op === "signUp" || op === "signInWithPassword") {
+    return { data: { session: null }, error: null };
   }
   return { data: null, error: null };
 };
@@ -77,10 +119,24 @@ const ensureQueue = (state: SupabaseMockState, table: string, op: QueryOp) => {
   return state.responses[table][op];
 };
 
+const ensureAuthQueue = (state: SupabaseMockState, op: AuthOp) => {
+  if (!state.authResponses[op]) {
+    state.authResponses[op] = [];
+  }
+  return state.authResponses[op]!;
+};
+
+const ensureRpcQueue = (state: SupabaseMockState, fn: string) => {
+  if (!state.rpcResponses[fn]) {
+    state.rpcResponses[fn] = [];
+  }
+  return state.rpcResponses[fn];
+};
+
 const recordPayload = (
   state: SupabaseMockState,
   table: string,
-  op: "insert" | "update",
+  op: "insert" | "update" | "upsert",
   payload: unknown
 ) => {
   if (!state.payloads[table]) {
@@ -110,6 +166,22 @@ const takeResponse = (
   return defaultResponse(op);
 };
 
+const takeAuthResponse = (state: SupabaseMockState, op: AuthOp) => {
+  const queue = ensureAuthQueue(state, op);
+  if (queue.length) {
+    return queue.shift()!;
+  }
+  return defaultAuthResponse(op);
+};
+
+const takeRpcResponse = (state: SupabaseMockState, fn: string) => {
+  const queue = ensureRpcQueue(state, fn);
+  if (queue.length) {
+    return queue.shift()!;
+  }
+  return { data: null, error: null };
+};
+
 const createQueryBuilder = (
   state: SupabaseMockState,
   table: string
@@ -128,6 +200,11 @@ const createQueryBuilder = (
     update: (payload) => {
       op = "update";
       recordPayload(state, table, "update", payload);
+      return builder;
+    },
+    upsert: (payload) => {
+      op = "upsert";
+      recordPayload(state, table, "upsert", payload);
       return builder;
     },
     delete: () => {
@@ -162,9 +239,41 @@ const createClient = (state: SupabaseMockState): SupabaseClientMock => ({
           }
         }
       };
+    },
+    signInWithPassword: async () => {
+      const response = takeAuthResponse(state, "signInWithPassword");
+      if (!response.error && response.data?.session) {
+        state.authSession = response.data.session;
+        state.authListeners.forEach((listener) =>
+          listener("SIGNED_IN", response.data?.session ?? null)
+        );
+      }
+      return response;
+    },
+    signUp: async () => {
+      const response = takeAuthResponse(state, "signUp");
+      if (!response.error && response.data?.session) {
+        state.authSession = response.data.session;
+        state.authListeners.forEach((listener) =>
+          listener("SIGNED_UP", response.data?.session ?? null)
+        );
+      }
+      return response;
+    },
+    resetPasswordForEmail: async () =>
+      takeAuthResponse(state, "resetPasswordForEmail"),
+    updateUser: async () => takeAuthResponse(state, "updateUser"),
+    signOut: async () => {
+      const response = takeAuthResponse(state, "signOut");
+      if (!response.error) {
+        state.authSession = null;
+        state.authListeners.forEach((listener) => listener("SIGNED_OUT", null));
+      }
+      return response;
     }
   },
-  from: (table) => createQueryBuilder(state, table)
+  from: (table) => createQueryBuilder(state, table),
+  rpc: async (fn) => takeRpcResponse(state, fn)
 });
 
 export const supabaseMockState: SupabaseMockState = {
@@ -173,6 +282,8 @@ export const supabaseMockState: SupabaseMockState = {
   authListeners: new Set(),
   responses: {},
   payloads: {},
+  authResponses: {},
+  rpcResponses: {},
   client: {} as SupabaseClientMock
 };
 
@@ -188,6 +299,8 @@ export const supabaseMock = {
     supabaseMockState.authListeners.clear();
     supabaseMockState.responses = {};
     supabaseMockState.payloads = {};
+    supabaseMockState.authResponses = {};
+    supabaseMockState.rpcResponses = {};
   },
   setReady: (ready: boolean) => {
     supabaseMockState.ready = ready;
@@ -204,13 +317,25 @@ export const supabaseMock = {
     }
     supabaseMockState.responses[table][op] = [...responses];
   },
+  enqueueAuthResponse: (op: AuthOp, response: AuthResponse) => {
+    ensureAuthQueue(supabaseMockState, op).push(response);
+  },
+  setAuthResponses: (op: AuthOp, responses: AuthResponse[]) => {
+    supabaseMockState.authResponses[op] = [...responses];
+  },
+  enqueueRpcResponse: (fn: string, response: QueryResponse) => {
+    ensureRpcQueue(supabaseMockState, fn).push(response);
+  },
+  setRpcResponses: (fn: string, responses: QueryResponse[]) => {
+    supabaseMockState.rpcResponses[fn] = [...responses];
+  },
   emitAuthChange: (event: string, session: Session | null) => {
     supabaseMockState.authSession = session;
     supabaseMockState.authListeners.forEach((callback) =>
       callback(event, session)
     );
   },
-  getLastPayload: (table: string, op: "insert" | "update") => {
+  getLastPayload: (table: string, op: "insert" | "update" | "upsert") => {
     const payloads = supabaseMockState.payloads[table]?.[op];
     if (!payloads || !payloads.length) {
       return undefined;

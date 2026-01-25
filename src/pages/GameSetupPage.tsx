@@ -61,30 +61,47 @@ export default function GameSetupPage() {
           );
         }
 
-        const { data: expansions, error: expansionsError } = await client
-          .from("expansions")
-          .select("id, name")
-          .eq("game_id", resolvedGameId);
+        const [
+          { data: expansions, error: expansionsError },
+          { data: steps, error: stepsError }
+        ] = await Promise.all([
+          client
+            .from("expansions")
+            .select("id, name")
+            .eq("game_id", resolvedGameId),
+          client
+            .from("steps")
+            .select(
+              "step_order, text, visual_asset, visual_animation, player_counts, include_expansions, exclude_expansions, include_modules, exclude_modules, require_no_expansions"
+            )
+            .eq("game_id", resolvedGameId)
+            .order("step_order", { ascending: true })
+        ]);
 
         if (expansionsError) {
           throw new Error(expansionsError.message);
         }
+        if (stepsError) {
+          throw new Error(stepsError.message);
+        }
 
         const expansionIds = (expansions ?? []).map((expansion) => expansion.id);
-        const expansionModulesResult = expansionIds.length
-          ? await client
-              .from("expansion_modules")
-              .select("id, expansion_id, name, description")
-              .in("expansion_id", expansionIds)
-          : { data: [], error: null };
+        const [expansionModulesResult, baseModulesResult] = await Promise.all([
+          expansionIds.length
+            ? client
+                .from("expansion_modules")
+                .select("id, expansion_id, name, description")
+                .in("expansion_id", expansionIds)
+            : Promise.resolve({ data: [], error: null }),
+          client
+            .from("expansion_modules")
+            .select("id, expansion_id, name, description")
+            .is("expansion_id", null)
+        ]);
+
         if (expansionModulesResult.error) {
           throw new Error(expansionModulesResult.error.message);
         }
-
-        const baseModulesResult = await client
-          .from("expansion_modules")
-          .select("id, expansion_id, name, description")
-          .is("expansion_id", null);
         if (baseModulesResult.error) {
           throw new Error(baseModulesResult.error.message);
         }
@@ -93,18 +110,6 @@ export default function GameSetupPage() {
           ...((expansionModulesResult.data ?? []) as ModuleRow[]),
           ...((baseModulesResult.data ?? []) as ModuleRow[])
         ];
-
-        const { data: steps, error: stepsError } = await client
-          .from("steps")
-          .select(
-            "step_order, text, visual_asset, visual_animation, player_counts, include_expansions, exclude_expansions, include_modules, exclude_modules, require_no_expansions"
-          )
-          .eq("game_id", resolvedGameId)
-          .order("step_order", { ascending: true });
-
-        if (stepsError) {
-          throw new Error(stepsError.message);
-        }
 
         const playerCounts = Array.from(
           { length: gameRow.players_max - gameRow.players_min + 1 },
@@ -218,21 +223,9 @@ export default function GameSetupPage() {
         expansionToggleRef.current?.focus();
       }
     };
-    const handlePointerDown = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (
-        expansionMenuRef.current?.contains(target) ||
-        expansionToggleRef.current?.contains(target)
-      ) {
-        return;
-      }
-      setExpansionMenuOpen(false);
-    };
     document.addEventListener("keydown", handleKeyDown);
-    document.addEventListener("mousedown", handlePointerDown);
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      document.removeEventListener("mousedown", handlePointerDown);
     };
   }, [expansionMenuOpen]);
 

@@ -10,8 +10,8 @@ import {
   type FormEvent
 } from "react";
 import { useLocation } from "react-router-dom";
-import type { Session } from "@supabase/supabase-js";
 import ShellLayout from "./components/ShellLayout";
+import { useSession } from "./context/SessionContext";
 import { supabase, supabaseReady } from "./lib/supabase";
 
 const IMAGE_BUCKET = "Card images";
@@ -270,8 +270,7 @@ const collectStoragePaths = (
 
 export default function AdminApp() {
   const location = useLocation();
-  const [session, setSession] = useState<Session | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const { session, authLoading } = useSession();
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
@@ -348,44 +347,6 @@ export default function AdminApp() {
 
   const userEmail = session?.user?.email ?? "";
   const userId = session?.user?.id ?? "";
-
-  useEffect(() => {
-    if (!supabaseReady || !supabase) {
-      setAuthError("Missing Supabase configuration.");
-      setAuthLoading(false);
-      return;
-    }
-    const client = supabase;
-    let active = true;
-
-    client.auth
-      .getSession()
-      .then(({ data, error }) => {
-        if (!active) {
-          return;
-        }
-        if (error) {
-          setAuthError(error.message);
-        }
-        setSession(data.session ?? null);
-      })
-      .finally(() => {
-        if (active) {
-          setAuthLoading(false);
-        }
-      });
-
-    const { data: listener } = client.auth.onAuthStateChange(
-      (_event, nextSession) => {
-        setSession(nextSession);
-      }
-    );
-
-    return () => {
-      active = false;
-      listener.subscription.unsubscribe();
-    };
-  }, []);
 
   useEffect(() => {
     if (!supabaseReady || !supabase) {
@@ -1587,13 +1548,6 @@ export default function AdminApp() {
     <div className="steps-inline-form">
       <div className="admin-form-header">
         <strong>{stepFormLabel}</strong>
-        <button
-          type="button"
-          className="btn ghost small"
-          onClick={() => setStepFormOpen(false)}
-        >
-          Hide
-        </button>
       </div>
       <form
         className="admin-form admin-form-grid"

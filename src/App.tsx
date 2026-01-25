@@ -1,6 +1,5 @@
 import { useEffect, useMemo } from "react";
 import { Outlet, useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { SessionProvider } from "./context/SessionContext";
 import ShellLayout from "./components/ShellLayout";
 
 const AppShell = () => {
@@ -98,9 +97,5 @@ const AppShell = () => {
 };
 
 export default function App() {
-  return (
-    <SessionProvider>
-      <AppShell />
-    </SessionProvider>
-  );
+  return <AppShell />;
 }

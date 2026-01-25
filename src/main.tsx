@@ -2,6 +2,8 @@ import { StrictMode, Suspense, lazy } from "react";
 import { createRoot } from "react-dom/client";
 import { Navigate, RouterProvider, createBrowserRouter } from "react-router-dom";
 import App from "./App";
+import ErrorBoundary from "./components/ErrorBoundary";
+import { SessionProvider } from "./context/SessionContext";
 import { initializeTheme } from "./lib/theme";
 import GameSetupPage from "./pages/GameSetupPage";
 import HomePage from "./pages/HomePage";
@@ -77,6 +79,10 @@ if (!container) {
 
 createRoot(container).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <ErrorBoundary>
+      <SessionProvider>
+        <RouterProvider router={router} />
+      </SessionProvider>
+    </ErrorBoundary>
   </StrictMode>
 );
