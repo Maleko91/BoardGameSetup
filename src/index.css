@@ -1548,11 +1548,19 @@ h1 {
 
 .admin-stage {
   gap: 24px;
+  overflow-anchor: none;
 }
 
 .admin-panel h2 {
   margin: 0;
   font-size: 1.2rem;
+}
+
+.admin-panel {
+  backdrop-filter: none;
+  background: var(--panel-strong);
+  overflow: hidden;
+  isolation: isolate;
 }
 
 .games-toolbar {
@@ -1604,14 +1612,14 @@ h1 {
 }
 
 .admin-table-body {
-  display: grid;
+  display: block;
   max-height: 320px;
   overflow-y: auto;
 }
 
 .steps-table .admin-table-body {
   max-height: none;
-  overflow: visible;
+  overflow-y: visible;
 }
 
 .expansions-table .admin-table-header,
@@ -1629,8 +1637,16 @@ h1 {
   grid-template-columns: 50px 70px minmax(0, 1fr) var(--table-action-size);
 }
 
+.steps-table .admin-table-header {
+  position: static;
+}
+
 .steps-table {
   --table-action-size: 44px;
+}
+
+.steps-table.is-loading .admin-table-body {
+  opacity: 0.6;
 }
 
 .steps-table .admin-table-title {

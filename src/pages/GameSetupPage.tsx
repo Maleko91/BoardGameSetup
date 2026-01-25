@@ -37,6 +37,13 @@ type ExpansionModule = {
   description?: string;
 };
 
+type ModuleRow = {
+  id: string;
+  expansion_id: string | null;
+  name: string;
+  description: string | null;
+};
+
 type GameData = {
   id: string;
   title: string;
@@ -50,6 +57,7 @@ type GameData = {
 };
 
 const DEFAULT_GAME = "cascadia";
+const BASE_MODULE_KEY = "__base__";
 
 export default function GameSetupPage() {
   const { gameId } = useParams<{ gameId: string }>();
@@ -106,16 +114,28 @@ export default function GameSetupPage() {
         }
 
         const expansionIds = (expansions ?? []).map((expansion) => expansion.id);
-        const { data: modules, error: modulesError } = expansionIds.length
+        const expansionModulesResult = expansionIds.length
           ? await client
               .from("expansion_modules")
               .select("id, expansion_id, name, description")
               .in("expansion_id", expansionIds)
           : { data: [], error: null };
-
-        if (modulesError) {
-          throw new Error(modulesError.message);
+        if (expansionModulesResult.error) {
+          throw new Error(expansionModulesResult.error.message);
         }
+
+        const baseModulesResult = await client
+          .from("expansion_modules")
+          .select("id, expansion_id, name, description")
+          .is("expansion_id", null);
+        if (baseModulesResult.error) {
+          throw new Error(baseModulesResult.error.message);
+        }
+
+        const modules: ModuleRow[] = [
+          ...((expansionModulesResult.data ?? []) as ModuleRow[]),
+          ...((baseModulesResult.data ?? []) as ModuleRow[])
+        ];
 
         const { data: steps, error: stepsError } = await client
           .from("steps")
@@ -134,18 +154,20 @@ export default function GameSetupPage() {
           (_, index) => gameRow.players_min + index
         );
 
-        const expansionModules = (modules ?? []).reduce<
-          Record<string, ExpansionModule[]>
-        >((acc, module) => {
-          const list = acc[module.expansion_id] ?? [];
-          list.push({
-            id: module.id,
-            name: module.name,
-            description: module.description ?? undefined
-          });
-          acc[module.expansion_id] = list;
-          return acc;
-        }, {});
+        const expansionModules = modules.reduce<Record<string, ExpansionModule[]>>(
+          (acc, module) => {
+            const key = module.expansion_id ?? BASE_MODULE_KEY;
+            const list = acc[key] ?? [];
+            list.push({
+              id: module.id,
+              name: module.name,
+              description: module.description ?? undefined
+            });
+            acc[key] = list;
+            return acc;
+          },
+          {}
+        );
 
         const common: Step[] = [];
         const conditionalSteps: ConditionalStep[] = [];
@@ -234,10 +256,12 @@ export default function GameSetupPage() {
       setSelectedModules([]);
       return;
     }
+    const baseModules = game.expansionModules?.[BASE_MODULE_KEY] ?? [];
+    const expansionModules = selectedExpansions.flatMap(
+      (expansionId) => game.expansionModules?.[expansionId] ?? []
+    );
     const allowed = new Set(
-      selectedExpansions.flatMap(
-        (expansionId) => game.expansionModules?.[expansionId] ?? []
-      ).map((module) => module.id)
+      [...baseModules, ...expansionModules].map((module) => module.id)
     );
     setSelectedModules((current) => current.filter((id) => allowed.has(id)));
   }, [game, selectedExpansions]);
@@ -325,9 +349,18 @@ export default function GameSetupPage() {
     if (!game?.expansionModules) {
       return [];
     }
-    return selectedExpansions.flatMap(
+    const baseModules = game.expansionModules?.[BASE_MODULE_KEY] ?? [];
+    const expansionModules = selectedExpansions.flatMap(
       (expansionId) => game.expansionModules?.[expansionId] ?? []
     );
+    const seen = new Set<string>();
+    return [...baseModules, ...expansionModules].filter((module) => {
+      if (seen.has(module.id)) {
+        return false;
+      }
+      seen.add(module.id);
+      return true;
+    });
   }, [game, selectedExpansions]);
 
   const expansionSummaryLabel = useMemo(() => {
