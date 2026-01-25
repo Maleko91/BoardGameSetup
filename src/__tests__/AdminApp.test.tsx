@@ -1,9 +1,9 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import type { Session } from "@supabase/supabase-js";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import AdminApp from "../AdminApp";
-import { supabaseMock } from "../test/supabaseMock";
+import { supabaseMock, supabaseMockState } from "../test/supabaseMock";
 
 const seedAdminData = () => {
   supabaseMock.setReady(true);
@@ -178,5 +178,49 @@ describe("AdminApp", () => {
       throw new Error("Module row not found.");
     }
     expect(moduleRow).toHaveClass("selected");
+  });
+
+  it("deletes expansion modules before removing an expansion", async () => {
+    seedAdminData();
+    supabaseMock.enqueueResponse("expansion_modules", "select", {
+      data: [],
+      error: null
+    });
+    supabaseMock.enqueueResponse("expansion_modules", "delete", {
+      data: null,
+      error: null
+    });
+    supabaseMock.enqueueResponse("expansions", "delete", {
+      data: null,
+      error: null
+    });
+    supabaseMock.enqueueResponse("expansions", "select", {
+      data: [],
+      error: null
+    });
+
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={["/admin"]}>
+        <AdminApp />
+      </MemoryRouter>
+    );
+
+    const gameRow = await screen.findByText("Game One");
+    await user.click(gameRow);
+
+    const expansionRowText = await screen.findByText("Expansion One");
+    await user.click(expansionRowText);
+
+    await user.click(screen.getByRole("button", { name: "Delete expansion" }));
+
+    await waitFor(() => {
+      expect(supabaseMockState.responses.expansion_modules?.delete?.length ?? 0).toBe(
+        0
+      );
+      expect(supabaseMockState.responses.expansions?.delete?.length ?? 0).toBe(0);
+    });
+
+    expect(screen.getByText("Expansion deleted.")).toBeInTheDocument();
   });
 });

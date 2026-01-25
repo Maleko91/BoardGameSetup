@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { getPublicAssetUrl } from "../lib/assets";
 import { supabase, supabaseReady } from "../lib/supabase";
 import type { CatalogGame } from "../types/game";
 
@@ -11,27 +12,110 @@ const SORT_LABELS: Record<SortOption, string> = {
   alpha: "Alphabetical",
   "max-players": "Max players"
 };
+const DEFAULT_SORT: SortOption = "popularity";
+const SEARCH_PARAM_QUERY = "q";
+const SEARCH_PARAM_SORT = "sort";
+const SEARCH_PARAM_PAGE = "p";
+const SEARCH_DEBOUNCE_MS = 300;
 
-const getPublicAssetUrl = (path: string) =>
-  `${import.meta.env.BASE_URL}${encodeURI(path)}`;
+const parseSortOption = (value: string | null): SortOption => {
+  if (value && SORT_OPTIONS.includes(value as SortOption)) {
+    return value as SortOption;
+  }
+  return DEFAULT_SORT;
+};
+
+const parsePageParam = (value: string | null) => {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return 1;
+  }
+  return Math.floor(parsed);
+};
+
+const normalizeSortParam = (value: SortOption) =>
+  value === DEFAULT_SORT ? null : value;
+
+const normalizePageParam = (value: number) => (value <= 1 ? null : String(value));
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [games, setGames] = useState<CatalogGame[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState("");
   const [totalCount, setTotalCount] = useState(0);
-  const [searchTerm, setSearchTerm] = useState("");
+  const appliedSearch = (searchParams.get(SEARCH_PARAM_QUERY) ?? "").trim();
+  const sortOption = parseSortOption(searchParams.get(SEARCH_PARAM_SORT));
+  const currentPage = parsePageParam(searchParams.get(SEARCH_PARAM_PAGE));
+  const [searchInput, setSearchInput] = useState(appliedSearch);
   const [searchPlaceholder, setSearchPlaceholder] = useState("Search by name");
-  const [currentPage, setCurrentPage] = useState(1);
-  const [sortOption, setSortOption] = useState<SortOption>("popularity");
   const [mobileSortOpen, setMobileSortOpen] = useState(false);
   const mobileSortRef = useRef<HTMLDivElement | null>(null);
+  const sortToggleRef = useRef<HTMLButtonElement | null>(null);
+
+  const updateSearchParams = useCallback(
+    (updates: Record<string, string | null | undefined>, replace = false) => {
+      const next = new URLSearchParams(searchParams);
+      Object.entries(updates).forEach(([key, value]) => {
+        if (value === null || value === undefined || value === "") {
+          next.delete(key);
+        } else {
+          next.set(key, value);
+        }
+      });
+      if (next.toString() === searchParams.toString()) {
+        return;
+      }
+      setSearchParams(next, { replace });
+    },
+    [searchParams, setSearchParams]
+  );
 
   useEffect(() => {
-    setCurrentPage(1);
-    setMobileSortOpen(false);
-  }, [searchTerm, sortOption]);
+    setSearchInput(appliedSearch);
+  }, [appliedSearch]);
+
+  useEffect(() => {
+    const trimmed = searchInput.trim();
+    if (trimmed === appliedSearch) {
+      if (searchInput !== trimmed) {
+        setSearchInput(trimmed);
+      }
+      return;
+    }
+    const timerId = window.setTimeout(() => {
+      updateSearchParams(
+        {
+          [SEARCH_PARAM_QUERY]: trimmed || null,
+          [SEARCH_PARAM_PAGE]: null
+        },
+        true
+      );
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [appliedSearch, searchInput, updateSearchParams]);
+
+  useEffect(() => {
+    const normalizedSort = parseSortOption(searchParams.get(SEARCH_PARAM_SORT));
+    const normalizedPage = parsePageParam(searchParams.get(SEARCH_PARAM_PAGE));
+    const expectedSort = normalizeSortParam(normalizedSort);
+    const expectedPage = normalizePageParam(normalizedPage);
+    const rawSort = searchParams.get(SEARCH_PARAM_SORT);
+    const rawPage = searchParams.get(SEARCH_PARAM_PAGE);
+    if ((rawSort ?? null) === expectedSort && (rawPage ?? null) === expectedPage) {
+      return;
+    }
+    updateSearchParams(
+      {
+        [SEARCH_PARAM_SORT]: expectedSort,
+        [SEARCH_PARAM_PAGE]: expectedPage
+      },
+      true
+    );
+  }, [searchParams, updateSearchParams]);
 
   useEffect(() => {
     const examples = [
@@ -48,6 +132,10 @@ export default function HomePage() {
     let deleting = false;
     let cursorOn = true;
     let timerId = 0;
+
+    const stopAnimation = () => {
+      window.clearTimeout(timerId);
+    };
 
     const tick = () => {
       const current = examples[exampleIndex] ?? "";
@@ -78,9 +166,50 @@ export default function HomePage() {
       timerId = window.setTimeout(tick, 300);
     };
 
-    tick();
+    const startAnimation = () => {
+      stopAnimation();
+      exampleIndex = 0;
+      charIndex = 0;
+      deleting = false;
+      cursorOn = true;
+      tick();
+    };
+
+    if (typeof window.matchMedia !== "function") {
+      startAnimation();
+      return () => {
+        stopAnimation();
+      };
+    }
+
+    const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (motionQuery.matches) {
+      setSearchPlaceholder("Search by name");
+    } else {
+      startAnimation();
+    }
+
+    const handleMotionChange = (event: MediaQueryListEvent) => {
+      if (event.matches) {
+        stopAnimation();
+        setSearchPlaceholder("Search by name");
+      } else {
+        startAnimation();
+      }
+    };
+
+    if ("addEventListener" in motionQuery) {
+      motionQuery.addEventListener("change", handleMotionChange);
+      return () => {
+        motionQuery.removeEventListener("change", handleMotionChange);
+        stopAnimation();
+      };
+    }
+
+    motionQuery.addListener(handleMotionChange);
     return () => {
-      window.clearTimeout(timerId);
+      motionQuery.removeListener(handleMotionChange);
+      stopAnimation();
     };
   }, []);
 
@@ -88,21 +217,29 @@ export default function HomePage() {
     if (!mobileSortOpen) {
       return;
     }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setMobileSortOpen(false);
+        sortToggleRef.current?.focus();
+      }
+    };
     const handlePointerDown = (event: MouseEvent) => {
       const target = event.target as Node;
       if (mobileSortRef.current && !mobileSortRef.current.contains(target)) {
         setMobileSortOpen(false);
       }
     };
+    document.addEventListener("keydown", handleKeyDown);
     document.addEventListener("mousedown", handlePointerDown);
     return () => {
+      document.removeEventListener("keydown", handleKeyDown);
       document.removeEventListener("mousedown", handlePointerDown);
     };
   }, [mobileSortOpen]);
 
   useEffect(() => {
     let active = true;
-    const normalized = searchTerm.trim();
+    const normalized = appliedSearch;
     setCatalogLoading(true);
     setCatalogError("");
     setGames([]);
@@ -189,13 +326,18 @@ export default function HomePage() {
     return () => {
       active = false;
     };
-  }, [currentPage, searchTerm, sortOption]);
+  }, [appliedSearch, currentPage, sortOption]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
 
   useEffect(() => {
-    setCurrentPage((page) => Math.min(page, totalPages));
-  }, [totalPages]);
+    if (currentPage > totalPages) {
+      updateSearchParams(
+        { [SEARCH_PARAM_PAGE]: normalizePageParam(totalPages) },
+        true
+      );
+    }
+  }, [currentPage, totalPages, updateSearchParams]);
 
   const pageNumbers = useMemo(
     () => Array.from({ length: totalPages }, (_, index) => index + 1),
@@ -215,15 +357,16 @@ export default function HomePage() {
   };
 
   const goToPage = (page: number) => {
-    setCurrentPage(Math.min(Math.max(page, 1), totalPages));
+    const nextPage = Math.min(Math.max(page, 1), totalPages);
+    updateSearchParams({ [SEARCH_PARAM_PAGE]: normalizePageParam(nextPage) });
   };
 
-  const renderPagination = (position: "top" | "bottom") => {
+  const renderPagination = () => {
     if (!showPagination) {
       return null;
     }
     return (
-      <div className={`pagination pagination-${position}`}>
+      <div className="pagination">
         <button
           type="button"
           className="pagination-btn"
@@ -262,6 +405,17 @@ export default function HomePage() {
     navigate(`/game/${id}`);
   };
 
+  const handleSortChange = (nextSort: SortOption) => {
+    updateSearchParams(
+      {
+        [SEARCH_PARAM_SORT]: normalizeSortParam(nextSort),
+        [SEARCH_PARAM_PAGE]: null
+      },
+      true
+    );
+    setMobileSortOpen(false);
+  };
+
   const sortIcon = getPublicAssetUrl("svgs/adjustments-vertical.svg");
 
   return (
@@ -275,8 +429,8 @@ export default function HomePage() {
             <input
               id="game-search"
               type="search"
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
+              value={searchInput}
+              onChange={(event) => setSearchInput(event.target.value)}
               placeholder={searchPlaceholder}
               autoComplete="off"
               className="search-input"
@@ -289,6 +443,7 @@ export default function HomePage() {
                 aria-label="Sort games"
                 aria-expanded={mobileSortOpen}
                 aria-controls="mobile-sort-menu"
+                ref={sortToggleRef}
               >
                 <img src={sortIcon} alt="" aria-hidden="true" />
               </button>
@@ -305,10 +460,7 @@ export default function HomePage() {
                       }
                       role="menuitemradio"
                       aria-checked={option === sortOption}
-                      onClick={() => {
-                        setSortOption(option);
-                        setMobileSortOpen(false);
-                      }}
+                      onClick={() => handleSortChange(option)}
                     >
                       {SORT_LABELS[option]}
                     </button>
@@ -323,7 +475,9 @@ export default function HomePage() {
           <select
             className="sort-select"
             value={sortOption}
-            onChange={(event) => setSortOption(event.target.value as SortOption)}
+            onChange={(event) =>
+              handleSortChange(event.target.value as SortOption)
+            }
           >
             {SORT_OPTIONS.map((option) => (
               <option key={option} value={option}>
@@ -334,7 +488,11 @@ export default function HomePage() {
         </div>
       </div>
 
-      {catalogError && <div className="status error">{catalogError}</div>}
+      {catalogError && (
+        <div className="status error" role="alert">
+          {catalogError}
+        </div>
+      )}
 
       {catalogLoading ? (
         <div className="game-grid" aria-busy="true">
@@ -366,7 +524,7 @@ export default function HomePage() {
                   />
                 ) : (
                   <span className="game-cover-fallback">
-                    {entry.coverAsset ?? entry.id}
+                    {entry.title || entry.id}
                   </span>
                 )}
               </div>
@@ -381,7 +539,7 @@ export default function HomePage() {
         </div>
       )}
 
-      {renderPagination("bottom")}
+      {renderPagination()}
 
       {!catalogLoading && !catalogError && games.length === 0 && (
         <div className="empty-state">No games match that search yet.</div>

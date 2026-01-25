@@ -1,60 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase, supabaseReady } from "../lib/supabase";
-
-type Visual = {
-  asset: string;
-  animation: string;
-};
-
-type Step = {
-  order: number;
-  text: string;
-  visual: Visual;
-};
-
-type StepCondition = {
-  playerCounts?: number[];
-  includeExpansions?: string[];
-  excludeExpansions?: string[];
-  includeModules?: string[];
-  excludeModules?: string[];
-  requireNoExpansions?: boolean;
-};
-
-type ConditionalStep = Step & {
-  when?: StepCondition;
-};
-
-type Expansion = {
-  id: string;
-  name: string;
-};
-
-type ExpansionModule = {
-  id: string;
-  name: string;
-  description?: string;
-};
-
-type ModuleRow = {
-  id: string;
-  expansion_id: string | null;
-  name: string;
-  description: string | null;
-};
-
-type GameData = {
-  id: string;
-  title: string;
-  playerCounts: number[];
-  expansions?: Expansion[];
-  common: Step[];
-  byPlayerCount: Record<string, Step[]>;
-  conditionalSteps?: ConditionalStep[];
-  expansionModules?: Record<string, ExpansionModule[]>;
-  rulesUrl?: string;
-};
+import type {
+  ConditionalStep,
+  ExpansionModule,
+  GameData,
+  ModuleRow,
+  Step,
+  StepCondition
+} from "../types/game";
 
 const DEFAULT_GAME = "cascadia";
 const BASE_MODULE_KEY = "__base__";
@@ -71,6 +25,9 @@ export default function GameSetupPage() {
   const [expansionMenuOpen, setExpansionMenuOpen] = useState(false);
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [playerIndex, setPlayerIndex] = useState(0);
+  const expansionMenuRef = useRef<HTMLDivElement | null>(null);
+  const expansionToggleRef = useRef<HTMLButtonElement | null>(null);
+  const expansionMenuId = useId();
 
   useEffect(() => {
     if (!resolvedGameId) {
@@ -250,6 +207,34 @@ export default function GameSetupPage() {
     setPlayerIndex(0);
     setExpansionMenuOpen(false);
   }, [resolvedGameId]);
+
+  useEffect(() => {
+    if (!expansionMenuOpen) {
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setExpansionMenuOpen(false);
+        expansionToggleRef.current?.focus();
+      }
+    };
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as Node;
+      if (
+        expansionMenuRef.current?.contains(target) ||
+        expansionToggleRef.current?.contains(target)
+      ) {
+        return;
+      }
+      setExpansionMenuOpen(false);
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("mousedown", handlePointerDown);
+    };
+  }, [expansionMenuOpen]);
 
   useEffect(() => {
     if (!game?.expansionModules) {
@@ -446,13 +431,15 @@ export default function GameSetupPage() {
               onClick={() => setExpansionMenuOpen((open) => !open)}
               disabled={!game?.expansions?.length}
               aria-expanded={expansionMenuOpen}
+              aria-controls={expansionMenuId}
+              ref={expansionToggleRef}
             >
               {expansionSummaryLabel}
             </button>
           </div>
         </div>
         {expansionMenuOpen && (
-          <div className="dropdown-panel">
+          <div className="dropdown-panel" id={expansionMenuId} ref={expansionMenuRef}>
             {game?.expansions?.length ? (
               game.expansions.map((expansion) => {
                 const checked = selectedExpansions.includes(expansion.id);
@@ -503,8 +490,16 @@ export default function GameSetupPage() {
         )}
       </div>
 
-      {gameLoading && <div className="status">Loading setup steps...</div>}
-      {gameError && <div className="status error">{gameError}</div>}
+      {gameLoading && (
+        <div className="status" role="status" aria-live="polite">
+          Loading setup steps...
+        </div>
+      )}
+      {gameError && (
+        <div className="status error" role="alert">
+          {gameError}
+        </div>
+      )}
 
       {!gameLoading && !gameError && (
         <div className="steps-grid">

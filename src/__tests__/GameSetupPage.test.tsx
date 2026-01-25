@@ -3,8 +3,9 @@ import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import GameSetupPage from "../pages/GameSetupPage";
 import { supabaseMock } from "../test/supabaseMock";
+import type { Expansion, GameSetupStepRow, ModuleRow } from "../types/game";
 
-const seedGameSetupData = (steps: Array<Record<string, unknown>>) => {
+const seedGameSetupData = (steps: GameSetupStepRow[]) => {
   supabaseMock.setReady(true);
   supabaseMock.enqueueResponse("games", "single", {
     data: {
@@ -16,30 +17,33 @@ const seedGameSetupData = (steps: Array<Record<string, unknown>>) => {
     },
     error: null
   });
+  const expansions: Expansion[] = [{ id: "exp-1", name: "Expansion One" }];
   supabaseMock.enqueueResponse("expansions", "select", {
-    data: [{ id: "exp-1", name: "Expansion One" }],
+    data: expansions,
     error: null
   });
+  const expansionModules: ModuleRow[] = [
+    {
+      id: "mod-exp-1",
+      expansion_id: "exp-1",
+      name: "Expansion Module",
+      description: null
+    }
+  ];
   supabaseMock.enqueueResponse("expansion_modules", "select", {
-    data: [
-      {
-        id: "mod-exp-1",
-        expansion_id: "exp-1",
-        name: "Expansion Module",
-        description: null
-      }
-    ],
+    data: expansionModules,
     error: null
   });
+  const baseModules: ModuleRow[] = [
+    {
+      id: "mod-base-1",
+      expansion_id: null,
+      name: "Base Module",
+      description: null
+    }
+  ];
   supabaseMock.enqueueResponse("expansion_modules", "select", {
-    data: [
-      {
-        id: "mod-base-1",
-        expansion_id: null,
-        name: "Base Module",
-        description: null
-      }
-    ],
+    data: baseModules,
     error: null
   });
   supabaseMock.enqueueResponse("steps", "select", {

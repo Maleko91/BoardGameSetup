@@ -869,8 +869,8 @@ h1 {
 }
 
 .sort-toggle:focus-visible {
-  outline: 2px solid rgba(159, 123, 255, 0.35);
-  box-shadow: 0 0 0 3px rgba(159, 123, 255, 0.18);
+  outline: none;
+  box-shadow: none;
 }
 
 .sort-menu {
@@ -941,6 +941,13 @@ h1 {
 
 :root[data-theme="light"] .sort-select {
   background: rgba(255, 255, 255, 0.75);
+}
+
+.sort-select:focus,
+.sort-select:focus-visible {
+  outline: none;
+  border-color: var(--card-border);
+  box-shadow: none;
 }
 
 
@@ -2014,9 +2021,19 @@ h1 {
 .form-field input:focus,
 .form-field select:focus,
 .form-field textarea:focus {
-  outline: 2px solid rgba(159, 123, 255, 0.35);
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(159, 123, 255, 0.18);
+  outline: none;
+  border-color: var(--card-border);
+  box-shadow: none;
+}
+
+@supports selector(:focus-visible) {
+  button:focus,
+  button:focus-visible,
+  a:focus,
+  a:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
 }
 
 .form-field textarea {
