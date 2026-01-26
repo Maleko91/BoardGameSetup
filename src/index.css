@@ -869,8 +869,8 @@ h1 {
 }
 
 .sort-toggle:focus-visible {
-  outline: 2px solid rgba(159, 123, 255, 0.35);
-  box-shadow: 0 0 0 3px rgba(159, 123, 255, 0.18);
+  outline: none;
+  box-shadow: none;
 }
 
 .sort-menu {
@@ -941,6 +941,13 @@ h1 {
 
 :root[data-theme="light"] .sort-select {
   background: rgba(255, 255, 255, 0.75);
+}
+
+.sort-select:focus,
+.sort-select:focus-visible {
+  outline: none;
+  border-color: var(--card-border);
+  box-shadow: none;
 }
 
 
@@ -1548,11 +1555,19 @@ h1 {
 
 .admin-stage {
   gap: 24px;
+  overflow-anchor: none;
 }
 
 .admin-panel h2 {
   margin: 0;
   font-size: 1.2rem;
+}
+
+.admin-panel {
+  backdrop-filter: none;
+  background: var(--panel-strong);
+  overflow: hidden;
+  isolation: isolate;
 }
 
 .games-toolbar {
@@ -1604,14 +1619,14 @@ h1 {
 }
 
 .admin-table-body {
-  display: grid;
+  display: block;
   max-height: 320px;
   overflow-y: auto;
 }
 
 .steps-table .admin-table-body {
   max-height: none;
-  overflow: visible;
+  overflow-y: visible;
 }
 
 .expansions-table .admin-table-header,
@@ -1629,8 +1644,16 @@ h1 {
   grid-template-columns: 50px 70px minmax(0, 1fr) var(--table-action-size);
 }
 
+.steps-table .admin-table-header {
+  position: static;
+}
+
 .steps-table {
   --table-action-size: 44px;
+}
+
+.steps-table.is-loading .admin-table-body {
+  opacity: 0.6;
 }
 
 .steps-table .admin-table-title {
@@ -1998,9 +2021,19 @@ h1 {
 .form-field input:focus,
 .form-field select:focus,
 .form-field textarea:focus {
-  outline: 2px solid rgba(159, 123, 255, 0.35);
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(159, 123, 255, 0.18);
+  outline: none;
+  border-color: var(--card-border);
+  box-shadow: none;
+}
+
+@supports selector(:focus-visible) {
+  button:focus,
+  button:focus-visible,
+  a:focus,
+  a:focus-visible {
+    outline: none;
+    box-shadow: none;
+  }
 }
 
 .form-field textarea {
@@ -2174,6 +2207,7 @@ h1 {
   .profile-settings-actions .btn {
     width: 100%;
   }
+
 }
 
 @media (max-width: 720px) {

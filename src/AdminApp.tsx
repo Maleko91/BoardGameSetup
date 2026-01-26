@@ -1,6 +1,5 @@
 import {
   Fragment,
-  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -10,12 +9,10 @@ import {
   type DragEvent,
   type FormEvent
 } from "react";
-import { Link, useLocation } from "react-router-dom";
-import type { Session } from "@supabase/supabase-js";
+import { useLocation } from "react-router-dom";
+import ShellLayout from "./components/ShellLayout";
+import { useSession } from "./context/SessionContext";
 import { supabase, supabaseReady } from "./lib/supabase";
-
-const getPublicAssetUrl = (path: string) =>
-  `${import.meta.env.BASE_URL}${encodeURI(path)}`;
 
 const IMAGE_BUCKET = "Card images";
 const GAME_PAGE_SIZE = 8;
@@ -42,7 +39,7 @@ type ExpansionRow = {
 
 type ModuleRow = {
   id: string;
-  expansion_id: string;
+  expansion_id: string | null;
   name: string;
   description: string | null;
 };
@@ -178,6 +175,41 @@ const optionalString = (value: string) => {
   return trimmed ? trimmed : null;
 };
 
+const getErrorMessage = (err: unknown) => {
+  if (err instanceof Error) {
+    return err.message;
+  }
+  if (typeof err === "string") {
+    return err;
+  }
+  if (err && typeof err === "object") {
+    const { message, details, hint } = err as {
+      message?: unknown;
+      details?: unknown;
+      hint?: unknown;
+    };
+    const parts: string[] = [];
+    if (typeof message === "string") {
+      parts.push(message);
+    }
+    if (typeof details === "string") {
+      parts.push(details);
+    }
+    if (typeof hint === "string") {
+      parts.push(hint);
+    }
+    if (parts.length) {
+      return parts.join(" ");
+    }
+    try {
+      return JSON.stringify(err);
+    } catch {
+      return "Unexpected error.";
+    }
+  }
+  return String(err);
+};
+
 const buildUploadPath = (folder: string, file: File) => {
   const safeName = file.name.replace(/[^a-zA-Z0-9_.-]/g, "_");
   const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -207,15 +239,38 @@ const extractStoragePath = (url: string, bucket: string) => {
   }
 };
 
+const toStoragePath = (value: string | null | undefined, bucket: string) => {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const extracted = extractStoragePath(trimmed, bucket);
+  if (extracted) {
+    return extracted;
+  }
+  if (!trimmed.startsWith("http")) {
+    return trimmed.replace(/^\/+/, "");
+  }
+  return null;
+};
+
+const collectStoragePaths = (
+  values: Array<string | null | undefined>,
+  bucket: string
+) => {
+  const paths = new Set<string>();
+  values.forEach((value) => {
+    const path = toStoragePath(value, bucket);
+    if (path) {
+      paths.add(path);
+    }
+  });
+  return Array.from(paths);
+};
+
 export default function AdminApp() {
   const location = useLocation();
-  const [theme, setTheme] = useState<"dark" | "light">(() => {
-    const stored = window.localStorage.getItem("theme");
-    return stored === "dark" ? "dark" : "light";
-  });
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [session, setSession] = useState<Session | null>(null);
-  const [authLoading, setAuthLoading] = useState(true);
+  const { session, authLoading } = useSession();
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authError, setAuthError] = useState("");
@@ -288,109 +343,10 @@ export default function AdminApp() {
   const [stepMode, setStepMode] = useState<"create" | "edit">("create");
   const [stepForm, setStepForm] = useState<StepForm>(() => emptyStepForm());
   const [stepMessage, setStepMessage] = useState("");
-  const [stepsBodyMaxHeight, setStepsBodyMaxHeight] = useState<number | null>(
-    null
-  );
-  const stepsHeaderRef = useRef<HTMLDivElement | null>(null);
-  const stepsRowRef = useRef<HTMLDivElement | null>(null);
-  const stepsFormRef = useRef<HTMLDivElement | null>(null);
-  const navRef = useRef<HTMLElement | null>(null);
+  const stepsBodyRef = useRef<HTMLDivElement | null>(null);
 
   const userEmail = session?.user?.email ?? "";
   const userId = session?.user?.id ?? "";
-
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem("theme", theme);
-  }, [theme]);
-
-  const updateNavUnderline = useCallback((target: HTMLElement | null) => {
-    const nav = navRef.current;
-    if (!nav) {
-      return;
-    }
-    if (!target) {
-      nav.style.setProperty("--nav-underline-opacity", "0");
-      return;
-    }
-    const navRect = nav.getBoundingClientRect();
-    const targetRect = target.getBoundingClientRect();
-    const left = targetRect.left - navRect.left;
-    nav.style.setProperty("--nav-underline-left", `${left}px`);
-    nav.style.setProperty("--nav-underline-width", `${targetRect.width}px`);
-    nav.style.setProperty("--nav-underline-opacity", "1");
-  }, []);
-
-  const resetNavUnderline = useCallback(() => {
-    const nav = navRef.current;
-    if (!nav) {
-      return;
-    }
-    const active = nav.querySelector<HTMLElement>(".nav-link.active");
-    updateNavUnderline(active);
-  }, [updateNavUnderline]);
-
-  useEffect(() => {
-    setMenuOpen(false);
-  }, [location.pathname]);
-
-  useLayoutEffect(() => {
-    resetNavUnderline();
-  }, [location.pathname, resetNavUnderline]);
-
-  useEffect(() => {
-    if (menuOpen) {
-      resetNavUnderline();
-    }
-  }, [menuOpen, resetNavUnderline]);
-
-  useEffect(() => {
-    const handleResize = () => {
-      resetNavUnderline();
-    };
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, [resetNavUnderline]);
-
-  useEffect(() => {
-    if (!supabaseReady || !supabase) {
-      setAuthError("Missing Supabase configuration.");
-      setAuthLoading(false);
-      return;
-    }
-    const client = supabase;
-    let active = true;
-
-    client.auth
-      .getSession()
-      .then(({ data, error }) => {
-        if (!active) {
-          return;
-        }
-        if (error) {
-          setAuthError(error.message);
-        }
-        setSession(data.session ?? null);
-      })
-      .finally(() => {
-        if (active) {
-          setAuthLoading(false);
-        }
-      });
-
-    const { data: listener } = client.auth.onAuthStateChange(
-      (_event, nextSession) => {
-        setSession(nextSession);
-      }
-    );
-
-    return () => {
-      active = false;
-      listener.subscription.unsubscribe();
-    };
-  }, []);
 
   useEffect(() => {
     if (!supabaseReady || !supabase) {
@@ -447,7 +403,7 @@ export default function AdminApp() {
       }
       setGames((data ?? []) as GameRow[]);
     } catch (err) {
-      setGamesError(err instanceof Error ? err.message : String(err));
+      setGamesError(getErrorMessage(err));
     } finally {
       setGamesLoading(false);
     }
@@ -471,13 +427,13 @@ export default function AdminApp() {
       }
       setExpansions((data ?? []) as ExpansionRow[]);
     } catch (err) {
-      setExpansionsError(err instanceof Error ? err.message : String(err));
+      setExpansionsError(getErrorMessage(err));
     } finally {
       setExpansionsLoading(false);
     }
   };
 
-  const loadModules = async (expansionId: string) => {
+  const loadModules = async (expansionId: string | null) => {
     if (!supabaseReady || !supabase) {
       return;
     }
@@ -485,17 +441,22 @@ export default function AdminApp() {
     setModulesLoading(true);
     setModulesError("");
     try {
-      const { data, error } = await client
+      let query = client
         .from("expansion_modules")
         .select("id, expansion_id, name, description")
-        .eq("expansion_id", expansionId)
         .order("name", { ascending: true });
+      if (expansionId) {
+        query = query.eq("expansion_id", expansionId);
+      } else {
+        query = query.is("expansion_id", null);
+      }
+      const { data, error } = await query;
       if (error) {
         throw error;
       }
       setModules((data ?? []) as ModuleRow[]);
     } catch (err) {
-      setModulesError(err instanceof Error ? err.message : String(err));
+      setModulesError(getErrorMessage(err));
     } finally {
       setModulesLoading(false);
     }
@@ -521,7 +482,7 @@ export default function AdminApp() {
       }
       setSteps((data ?? []) as StepRow[]);
     } catch (err) {
-      setStepsError(err instanceof Error ? err.message : String(err));
+      setStepsError(getErrorMessage(err));
     } finally {
       setStepsLoading(false);
     }
@@ -544,7 +505,7 @@ export default function AdminApp() {
       }
       setAdmins((data ?? []) as AdminUserRow[]);
     } catch (err) {
-      setAdminsMessage(err instanceof Error ? err.message : String(err));
+      setAdminsMessage(getErrorMessage(err));
     }
   };
 
@@ -601,12 +562,12 @@ export default function AdminApp() {
   }, [expansions, selectedExpansionId]);
 
   useEffect(() => {
-    if (adminState !== "authorized" || !selectedExpansionId) {
+    if (adminState !== "authorized" || !selectedGameId) {
       setModules([]);
       return;
     }
-    loadModules(selectedExpansionId);
-  }, [adminState, selectedExpansionId]);
+    loadModules(selectedExpansionId || null);
+  }, [adminState, selectedGameId, selectedExpansionId]);
 
   useEffect(() => {
     if (!selectedGameId) {
@@ -653,7 +614,7 @@ export default function AdminApp() {
     setModuleSearchTerm("");
     setModuleVisibleCount(MODULE_PAGE_SIZE);
     setModuleFormOpen(false);
-  }, [selectedExpansionId]);
+  }, [selectedExpansionId, selectedGameId]);
 
   useEffect(() => {
     if (!selectedModuleId) {
@@ -682,7 +643,12 @@ export default function AdminApp() {
     setStepsReordering(false);
     setDraggedStepId(null);
     setDragOverStepId(null);
-    setStepsBodyMaxHeight(null);
+  }, [selectedGameId]);
+
+  useLayoutEffect(() => {
+    if (stepsBodyRef.current) {
+      stepsBodyRef.current.scrollTop = 0;
+    }
   }, [selectedGameId]);
 
   useEffect(() => {
@@ -732,104 +698,44 @@ export default function AdminApp() {
       }
       setAuthNotice("Signed in.");
     } catch (err) {
-      setAuthError(err instanceof Error ? err.message : String(err));
+      setAuthError(getErrorMessage(err));
     }
   };
-
-  const handleToggleTheme = () => {
-    setTheme((current) => (current === "dark" ? "light" : "dark"));
-  };
-
-  const handleToggleMenu = () => {
-    setMenuOpen((open) => !open);
-  };
-
-  const themeIcon =
-    theme === "dark"
-      ? getPublicAssetUrl("svgs/sun.svg")
-      : getPublicAssetUrl("svgs/moon.svg");
-  const menuIcon = getPublicAssetUrl("svgs/bars-3.svg");
 
   const isHomePage =
     location.pathname === "/" || location.pathname.startsWith("/game/");
   const isRequestPage = location.pathname.startsWith("/request");
   const isProfilePage = location.pathname.startsWith("/profile");
-  const header = (
-    <header className="masthead">
-      <div className="title-row">
-        <div className="nav-row">
-          <button
-            type="button"
-            className="nav-toggle"
-            onClick={handleToggleMenu}
-            aria-label="Toggle navigation"
-            aria-expanded={menuOpen}
-            aria-controls="admin-navigation"
-          >
-            <span className="nav-toggle-icon" aria-hidden="true">
-              <img src={menuIcon} alt="" />
-            </span>
-          </button>
-          <nav
-            ref={navRef}
-            id="admin-navigation"
-            className={menuOpen ? "site-nav is-open" : "site-nav"}
-            aria-label="Primary"
-            onMouseLeave={resetNavUnderline}
-          >
-            <span className="nav-underline" aria-hidden="true" />
-            <Link
-              to="/"
-              className={isHomePage ? "nav-link active" : "nav-link"}
-              aria-current={isHomePage ? "page" : undefined}
-              onMouseEnter={(event) => updateNavUnderline(event.currentTarget)}
-              onClick={() => setMenuOpen(false)}
-            >
-              Home
-            </Link>
-            <Link
-              to="/request"
-              className={isRequestPage ? "nav-link active" : "nav-link"}
-              aria-current={isRequestPage ? "page" : undefined}
-              onMouseEnter={(event) => updateNavUnderline(event.currentTarget)}
-              onClick={() => setMenuOpen(false)}
-            >
-              Request a game
-            </Link>
-            <Link
-              to="/profile"
-              className={isProfilePage ? "nav-link active" : "nav-link"}
-              aria-current={isProfilePage ? "page" : undefined}
-              onMouseEnter={(event) => updateNavUnderline(event.currentTarget)}
-              onClick={() => setMenuOpen(false)}
-            >
-              Profile
-            </Link>
-          </nav>
-          <button
-            type="button"
-            className="theme-toggle"
-            onClick={handleToggleTheme}
-            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            data-next={theme === "dark" ? "light" : "dark"}
-          >
-            <img src={themeIcon} alt="" aria-hidden="true" className="theme-toggle-icon" />
-          </button>
-        </div>
-        <h1>Admin Control Panel</h1>
-      </div>
-      <p className="subtitle">
-        Manage games, expansions, modules, and steps with Supabase-backed edits.
-      </p>
-    </header>
+  const navItems = useMemo(
+    () => [
+      { to: "/", label: "Home", isActive: isHomePage },
+      { to: "/request", label: "Request a game", isActive: isRequestPage },
+      { to: "/profile", label: "Profile", isActive: isProfilePage }
+    ],
+    [isHomePage, isProfilePage, isRequestPage]
   );
 
-  const uploadImage = async (file: File, folder: string) => {
+  const shellProps = useMemo(
+    () => ({
+      navId: "admin-navigation",
+      navItems,
+      title: "Admin Control Panel",
+      subtitle: "Manage games, expansions, modules, and steps with Supabase-backed edits.",
+      className: "admin-app"
+    }),
+    [navItems]
+  );
+
+  const uploadImage = async (file: File, folder: string, existingUrl?: string) => {
     if (!supabaseReady || !supabase) {
       throw new Error("Missing Supabase configuration.");
     }
     const client = supabase;
-    const path = buildUploadPath(folder, file);
+    const trimmedUrl = existingUrl?.trim();
+    const existingPath = trimmedUrl
+      ? extractStoragePath(trimmedUrl, IMAGE_BUCKET)
+      : null;
+    const path = existingPath ?? buildUploadPath(folder, file);
     const { error } = await client.storage
       .from(IMAGE_BUCKET)
       .upload(path, file, { upsert: true });
@@ -863,11 +769,11 @@ export default function AdminApp() {
     setGameCoverUploading(true);
     setGameMessage("");
     try {
-      const url = await uploadImage(file, "game-covers");
+      const url = await uploadImage(file, "game-covers", gameForm.cover_image);
       setGameForm((current) => ({ ...current, cover_image: url }));
       setGameMessage("Cover image uploaded.");
     } catch (err) {
-      setGameMessage(err instanceof Error ? err.message : String(err));
+      setGameMessage(getErrorMessage(err));
     } finally {
       setGameCoverUploading(false);
       event.target.value = "";
@@ -904,7 +810,7 @@ export default function AdminApp() {
       setGameForm((current) => ({ ...current, cover_image: "" }));
       setGameMessage("Cover image removed.");
     } catch (err) {
-      setGameMessage(err instanceof Error ? err.message : String(err));
+      setGameMessage(getErrorMessage(err));
     } finally {
       setGameCoverDeleting(false);
     }
@@ -953,7 +859,12 @@ export default function AdminApp() {
         }
         setGameMessage("Game created.");
       } else {
-        const { error } = await client
+        const updateId = selectedGameId || payload.id;
+        if (!updateId) {
+          setGameMessage("Select a game before saving changes.");
+          return;
+        }
+        const { data, error } = await client
           .from("games")
           .update({
             title: payload.title,
@@ -964,9 +875,15 @@ export default function AdminApp() {
             cover_image: payload.cover_image,
             rules_url: payload.rules_url
           })
-          .eq("id", payload.id);
+          .eq("id", updateId)
+          .select("id")
+          .maybeSingle();
         if (error) {
           throw error;
+        }
+        if (!data) {
+          setGameMessage("No rows updated. Check permissions or the game id.");
+          return;
         }
         setGameMessage("Game updated.");
       }
@@ -976,7 +893,7 @@ export default function AdminApp() {
         setGameMode("edit");
       }
     } catch (err) {
-      setGameMessage(err instanceof Error ? err.message : String(err));
+      setGameMessage(getErrorMessage(err));
     }
   };
 
@@ -985,24 +902,107 @@ export default function AdminApp() {
       setGameMessage("Select a game first.");
       return;
     }
+    if (
+      !window.confirm(
+        `Delete the game "${gameForm.title || selectedGameId}"? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
     if (!supabaseReady || !supabase) {
       setGameMessage("Missing Supabase configuration.");
       return;
     }
     const client = supabase;
+    setGameMessage("");
     try {
-      const { error } = await client.from("games").delete().eq("id", selectedGameId);
+      const { data: expansions, error: expansionsError } = await client
+        .from("expansions")
+        .select("id")
+        .eq("game_id", selectedGameId);
+      if (expansionsError) {
+        throw expansionsError;
+      }
+      const expansionIds = (expansions ?? []).map((expansion) => expansion.id);
+
+      const { data: stepAssets, error: stepAssetsError } = await client
+        .from("steps")
+        .select("visual_asset, visual_animation")
+        .eq("game_id", selectedGameId);
+      if (stepAssetsError) {
+        throw stepAssetsError;
+      }
+
+      const assetPaths = collectStoragePaths(
+        [
+          gameForm.cover_image,
+          ...(stepAssets ?? []).map((asset) => asset.visual_asset),
+          ...(stepAssets ?? []).map((asset) => asset.visual_animation)
+        ],
+        IMAGE_BUCKET
+      );
+
+      if (expansionIds.length) {
+        const { error: modulesError } = await client
+          .from("expansion_modules")
+          .delete()
+          .in("expansion_id", expansionIds);
+        if (modulesError) {
+          throw modulesError;
+        }
+      }
+
+      const { error: stepsError } = await client
+        .from("steps")
+        .delete()
+        .eq("game_id", selectedGameId);
+      if (stepsError) {
+        throw stepsError;
+      }
+
+      const { error: expansionsDeleteError } = await client
+        .from("expansions")
+        .delete()
+        .eq("game_id", selectedGameId);
+      if (expansionsDeleteError) {
+        throw expansionsDeleteError;
+      }
+
+      const { data, error } = await client
+        .from("games")
+        .delete()
+        .eq("id", selectedGameId)
+        .select("id")
+        .maybeSingle();
       if (error) {
         throw error;
       }
-      setGameMessage("Game deleted.");
+      if (!data) {
+        setGameMessage("No rows deleted. Check permissions or the game id.");
+        return;
+      }
+
+      if (assetPaths.length) {
+        const { error: storageError } = await client.storage
+          .from(IMAGE_BUCKET)
+          .remove(assetPaths);
+        if (storageError) {
+          setGameMessage(
+            "Game deleted, but some storage assets could not be removed."
+          );
+        } else {
+          setGameMessage("Game deleted.");
+        }
+      } else {
+        setGameMessage("Game deleted.");
+      }
       setGameMode("create");
       setGameForm(emptyGameForm());
       setSelectedGameId("");
       setGameFormOpen(true);
       await loadGames();
     } catch (err) {
-      setGameMessage(err instanceof Error ? err.message : String(err));
+      setGameMessage(getErrorMessage(err));
     }
   };
 
@@ -1056,7 +1056,7 @@ export default function AdminApp() {
         setExpansionMode("edit");
       }
     } catch (err) {
-      setExpansionMessage(err instanceof Error ? err.message : String(err));
+      setExpansionMessage(getErrorMessage(err));
     }
   };
 
@@ -1071,6 +1071,13 @@ export default function AdminApp() {
     }
     const client = supabase;
     try {
+      const { error: modulesError } = await client
+        .from("expansion_modules")
+        .delete()
+        .eq("expansion_id", selectedExpansionId);
+      if (modulesError) {
+        throw modulesError;
+      }
       const { error } = await client
         .from("expansions")
         .delete()
@@ -1084,15 +1091,15 @@ export default function AdminApp() {
       setSelectedExpansionId("");
       await loadExpansions(selectedGameId);
     } catch (err) {
-      setExpansionMessage(err instanceof Error ? err.message : String(err));
+      setExpansionMessage(getErrorMessage(err));
     }
   };
 
   const handleCreateOrUpdateModule = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setModuleMessage("");
-    if (!selectedExpansionId) {
-      setModuleMessage("Select an expansion first.");
+    if (!selectedGameId) {
+      setModuleMessage("Select a game first.");
       return;
     }
     if (!supabaseReady || !supabase) {
@@ -1110,9 +1117,10 @@ export default function AdminApp() {
       setModuleMessage("Module name is required.");
       return;
     }
+    const expansionId = selectedExpansionId || null;
     const payload = {
       id,
-      expansion_id: selectedExpansionId,
+      expansion_id: expansionId,
       name,
       description: optionalString(moduleForm.description)
     };
@@ -1134,13 +1142,13 @@ export default function AdminApp() {
         }
         setModuleMessage("Module updated.");
       }
-      await loadModules(selectedExpansionId);
+      await loadModules(expansionId);
       if (moduleMode === "create") {
         setSelectedModuleId(id);
         setModuleFormOpen(true);
       }
     } catch (err) {
-      setModuleMessage(err instanceof Error ? err.message : String(err));
+      setModuleMessage(getErrorMessage(err));
     }
   };
 
@@ -1154,6 +1162,7 @@ export default function AdminApp() {
       return;
     }
     const client = supabase;
+    const expansionId = selectedExpansionId || null;
     try {
       const { error } = await client
         .from("expansion_modules")
@@ -1166,9 +1175,9 @@ export default function AdminApp() {
       setModuleMode("create");
       setModuleForm(emptyModuleForm());
       setSelectedModuleId("");
-      await loadModules(selectedExpansionId);
+      await loadModules(expansionId);
     } catch (err) {
-      setModuleMessage(err instanceof Error ? err.message : String(err));
+      setModuleMessage(getErrorMessage(err));
     }
   };
 
@@ -1251,7 +1260,7 @@ export default function AdminApp() {
         await loadSteps(selectedGameId);
       }
     } catch (err) {
-      setStepMessage(err instanceof Error ? err.message : String(err));
+      setStepMessage(getErrorMessage(err));
     }
   };
 
@@ -1277,7 +1286,7 @@ export default function AdminApp() {
       setStepFormOpen(false);
       await loadSteps(selectedGameId);
     } catch (err) {
-      setStepMessage(err instanceof Error ? err.message : String(err));
+      setStepMessage(getErrorMessage(err));
     }
   };
 
@@ -1322,7 +1331,7 @@ export default function AdminApp() {
       setAdminEmailInput("");
       await loadAdmins();
     } catch (err) {
-      setAdminsMessage(err instanceof Error ? err.message : String(err));
+      setAdminsMessage(getErrorMessage(err));
     }
   };
 
@@ -1343,7 +1352,7 @@ export default function AdminApp() {
       setAdminsMessage("Admin access removed.");
       await loadAdmins();
     } catch (err) {
-      setAdminsMessage(err instanceof Error ? err.message : String(err));
+      setAdminsMessage(getErrorMessage(err));
     }
   };
 
@@ -1457,22 +1466,6 @@ export default function AdminApp() {
     }
   }, [selectedStepId, visibleSteps]);
 
-  useLayoutEffect(() => {
-    if (visibleSteps.length <= 10) {
-      setStepsBodyMaxHeight(null);
-      return;
-    }
-    const headerHeight = stepsHeaderRef.current?.offsetHeight ?? 0;
-    const rowHeight = stepsRowRef.current?.offsetHeight ?? 0;
-    const formHeight =
-      stepFormOpen && stepsFormRef.current ? stepsFormRef.current.offsetHeight : 0;
-    if (!rowHeight) {
-      setStepsBodyMaxHeight(null);
-      return;
-    }
-    setStepsBodyMaxHeight(headerHeight + rowHeight * 10 + formHeight);
-  }, [stepFormOpen, visibleSteps.length, selectedStepId, stepForm]);
-
   const filteredGames = useMemo(() => {
     const term = gameSearchTerm.trim().toLowerCase();
     if (!term) {
@@ -1540,21 +1533,21 @@ export default function AdminApp() {
     moduleMode === "create"
       ? "New module"
       : `Editing: ${moduleForm.name || moduleForm.id || "Module"}`;
+  const moduleContextLabel = useMemo(() => {
+    if (!selectedExpansionId) {
+      return "Base game";
+    }
+    const selected = expansions.find((expansion) => expansion.id === selectedExpansionId);
+    return selected?.name ?? selectedExpansionId;
+  }, [expansions, selectedExpansionId]);
   const stepFormLabel =
     stepMode === "create"
       ? "New step"
       : `Editing: Step ${stepForm.step_order || "?"}`;
   const renderStepForm = () => (
-    <div className="steps-inline-form" ref={stepsFormRef}>
+    <div className="steps-inline-form">
       <div className="admin-form-header">
         <strong>{stepFormLabel}</strong>
-        <button
-          type="button"
-          className="btn ghost small"
-          onClick={() => setStepFormOpen(false)}
-        >
-          Hide
-        </button>
       </div>
       <form
         className="admin-form admin-form-grid"
@@ -1652,7 +1645,7 @@ export default function AdminApp() {
             <div className="step-matrix-empty">
               {selectedExpansionId
                 ? "No modules for this expansion."
-                : "Select an expansion to see modules."}
+                : "No base modules for this game."}
             </div>
           )}
         </div>
@@ -1711,9 +1704,11 @@ export default function AdminApp() {
   };
 
   const handleSelectExpansion = (id: string) => {
-    if (selectedExpansionId !== id) {
-      setSelectedExpansionId(id);
+    if (selectedExpansionId === id) {
+      setSelectedExpansionId("");
+      return;
     }
+    setSelectedExpansionId(id);
   };
 
   const handleNewExpansion = () => {
@@ -1735,9 +1730,11 @@ export default function AdminApp() {
   };
 
   const handleSelectModule = (id: string) => {
-    if (selectedModuleId !== id) {
-      setSelectedModuleId(id);
+    if (selectedModuleId === id) {
+      setSelectedModuleId("");
+      return;
     }
+    setSelectedModuleId(id);
   };
 
   const handleNewModule = () => {
@@ -1759,6 +1756,9 @@ export default function AdminApp() {
   };
 
   const handleSelectStep = (step: StepRow) => {
+    if (stepsLoading) {
+      return;
+    }
     if (stepFormOpen && selectedStepId !== step.id) {
       setStepFormOpen(false);
     }
@@ -1766,6 +1766,9 @@ export default function AdminApp() {
   };
 
   const handleToggleStepForm = (step: StepRow) => {
+    if (stepsLoading) {
+      return;
+    }
     if (selectedStepId === step.id && stepFormOpen) {
       setStepFormOpen(false);
       return;
@@ -1775,6 +1778,9 @@ export default function AdminApp() {
   };
 
   const handleNewStep = () => {
+    if (stepsLoading) {
+      return;
+    }
     const nextOrder = sortedSteps.length
       ? Math.max(...sortedSteps.map((step) => step.step_order)) + 1
       : 1;
@@ -1813,6 +1819,10 @@ export default function AdminApp() {
   };
 
   const handleStepDragStart = (event: DragEvent<HTMLDivElement>, stepId: string) => {
+    if (stepsLoading) {
+      event.preventDefault();
+      return;
+    }
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", stepId);
     setDraggedStepId(stepId);
@@ -1849,7 +1859,7 @@ export default function AdminApp() {
       await persistStepOrder(reordered);
       setStepMessage("Step order updated.");
     } catch (err) {
-      setStepMessage(err instanceof Error ? err.message : String(err));
+      setStepMessage(getErrorMessage(err));
       if (selectedGameId) {
         await loadSteps(selectedGameId);
       }
@@ -1867,26 +1877,26 @@ export default function AdminApp() {
 
   if (!supabaseReady || !supabase) {
     return (
-      <div className="app admin-app">
-        {header}
-        <div className="status error">Missing Supabase configuration.</div>
-      </div>
+      <ShellLayout {...shellProps}>
+        <div className="status error" role="alert">
+          Missing Supabase configuration.
+        </div>
+      </ShellLayout>
     );
   }
 
   if (authLoading) {
     return (
-      <div className="app admin-app">
-        {header}
-        <div className="status">Checking admin session...</div>
-      </div>
+      <ShellLayout {...shellProps}>
+        <div className="status" role="status" aria-live="polite">
+          Checking admin session...
+        </div>
+      </ShellLayout>
     );
   }
 
   return (
-    <div className="app admin-app">
-      {header}
-
+    <ShellLayout {...shellProps}>
       {!session && (
         <section className="stage">
           <div className="panel admin-panel games-panel">
@@ -1917,14 +1927,24 @@ export default function AdminApp() {
                 Sign in
               </button>
             </form>
-            {authError && <div className="status error">{authError}</div>}
-            {authNotice && <div className="status">{authNotice}</div>}
+            {authError && (
+              <div className="status error" role="alert">
+                {authError}
+              </div>
+            )}
+            {authNotice && (
+              <div className="status" role="status" aria-live="polite">
+                {authNotice}
+              </div>
+            )}
           </div>
         </section>
       )}
 
       {session && adminState === "checking" && (
-        <div className="status">Checking admin access...</div>
+        <div className="status" role="status" aria-live="polite">
+          Checking admin access...
+        </div>
       )}
 
       {session && adminState === "unauthorized" && (
@@ -1934,7 +1954,11 @@ export default function AdminApp() {
             Your account is signed in as {userEmail}, but it is not marked as an
             admin user.
           </p>
-          {adminError && <div className="status error">{adminError}</div>}
+          {adminError && (
+            <div className="status error" role="alert">
+              {adminError}
+            </div>
+          )}
         </div>
       )}
 
@@ -1956,7 +1980,11 @@ export default function AdminApp() {
                 Add admin
               </button>
             </form>
-            {adminsMessage && <div className="status">{adminsMessage}</div>}
+            {adminsMessage && (
+              <div className="status" role="status" aria-live="polite">
+                {adminsMessage}
+              </div>
+            )}
             {admins.length > 0 && (
               <div className="admin-list">
                 {admins.map((admin) => (
@@ -1996,8 +2024,16 @@ export default function AdminApp() {
                 New game
               </button>
             </div>
-            {gamesLoading && <div className="status">Loading games...</div>}
-            {gamesError && <div className="status error">{gamesError}</div>}
+            {gamesLoading && (
+              <div className="status" role="status" aria-live="polite">
+                Loading games...
+              </div>
+            )}
+            {gamesError && (
+              <div className="status error" role="alert">
+                {gamesError}
+              </div>
+            )}
 
             <div className="admin-table">
               <div className="admin-table-body">
@@ -2218,9 +2254,21 @@ export default function AdminApp() {
                     </button>
                   </div>
                 </form>
-                {gameCoverUploading && <div className="status">Uploading cover...</div>}
-                {gameCoverDeleting && <div className="status">Removing cover...</div>}
-                {gameMessage && <div className="status">{gameMessage}</div>}
+                {gameCoverUploading && (
+                  <div className="status" role="status" aria-live="polite">
+                    Uploading cover...
+                  </div>
+                )}
+                {gameCoverDeleting && (
+                  <div className="status" role="status" aria-live="polite">
+                    Removing cover...
+                  </div>
+                )}
+                {gameMessage && (
+                  <div className="status" role="status" aria-live="polite">
+                    {gameMessage}
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -2249,9 +2297,15 @@ export default function AdminApp() {
                     New expansion
                   </button>
                 </div>
-                {expansionsLoading && <div className="status">Loading expansions...</div>}
+                {expansionsLoading && (
+                  <div className="status" role="status" aria-live="polite">
+                    Loading expansions...
+                  </div>
+                )}
                 {expansionsError && (
-                  <div className="status error">{expansionsError}</div>
+                  <div className="status error" role="alert">
+                    {expansionsError}
+                  </div>
                 )}
 
                 <div className="admin-table expansions-table">
@@ -2377,7 +2431,11 @@ export default function AdminApp() {
                         </button>
                       </div>
                     </form>
-                    {expansionMessage && <div className="status">{expansionMessage}</div>}
+                    {expansionMessage && (
+                      <div className="status" role="status" aria-live="polite">
+                        {expansionMessage}
+                      </div>
+                    )}
                   </div>
                 </div>
               </>
@@ -2386,8 +2444,8 @@ export default function AdminApp() {
 
           <div className="panel admin-panel modules-panel">
             <h2>Modules</h2>
-            {!selectedExpansionId ? (
-              <div className="empty-state compact">Please select an expansion first.</div>
+            {!selectedGameId ? (
+              <div className="empty-state compact">Please select a game first.</div>
             ) : (
               <>
                 <div className="games-toolbar">
@@ -2407,9 +2465,18 @@ export default function AdminApp() {
                   >
                     New module
                   </button>
+                  <span className="helper">Showing modules for {moduleContextLabel}.</span>
                 </div>
-                {modulesLoading && <div className="status">Loading modules...</div>}
-                {modulesError && <div className="status error">{modulesError}</div>}
+                {modulesLoading && (
+                  <div className="status" role="status" aria-live="polite">
+                    Loading modules...
+                  </div>
+                )}
+                {modulesError && (
+                  <div className="status error" role="alert">
+                    {modulesError}
+                  </div>
+                )}
 
                 <div className="admin-table modules-table">
                   <div className="admin-table-body">
@@ -2537,7 +2604,11 @@ export default function AdminApp() {
                         </button>
                       </div>
                     </form>
-                    {moduleMessage && <div className="status">{moduleMessage}</div>}
+                    {moduleMessage && (
+                      <div className="status" role="status" aria-live="polite">
+                        {moduleMessage}
+                      </div>
+                    )}
                   </div>
                 </div>
               </>
@@ -2555,25 +2626,31 @@ export default function AdminApp() {
                     type="button"
                     className="btn ghost small"
                     onClick={handleNewStep}
-                    disabled={stepsReordering}
+                    disabled={stepsReordering || stepsLoading}
                   >
                     New step
                   </button>
                   <span className="helper">Steps are tied to {selectedGameId}.</span>
                 </div>
-                {stepsLoading && <div className="status">Loading steps...</div>}
-                {stepsError && <div className="status error">{stepsError}</div>}
+                {stepsLoading && (
+                  <div className="status" role="status" aria-live="polite">
+                    Loading steps...
+                  </div>
+                )}
+                {stepsError && (
+                  <div className="status error" role="alert">
+                    {stepsError}
+                  </div>
+                )}
 
-                <div className="admin-table steps-table">
-                  <div
-                    className="admin-table-body"
-                    style={
-                      stepsBodyMaxHeight
-                        ? { maxHeight: `${stepsBodyMaxHeight}px`, overflowY: "auto" }
-                        : undefined
-                    }
-                  >
-                    <div className="admin-table-header" ref={stepsHeaderRef}>
+                <div
+                  className={`admin-table steps-table ${
+                    stepsLoading ? "is-loading" : ""
+                  }`}
+                  aria-busy={stepsLoading}
+                >
+                  <div className="admin-table-body" ref={stepsBodyRef}>
+                    <div className="admin-table-header">
                       <span className="table-col-center">Move</span>
                       <span className="table-col-center">Order</span>
                       <span className="table-col-start">Step</span>
@@ -2582,9 +2659,8 @@ export default function AdminApp() {
                     {stepFormOpen && stepMode === "create" && !selectedStepId
                       ? renderStepForm()
                       : null}
-                    {visibleSteps.map((step, index) => {
-                      const isExpanded =
-                        stepFormOpen && selectedStepId === step.id;
+                    {visibleSteps.map((step) => {
+                      const isExpanded = stepFormOpen && selectedStepId === step.id;
                       return (
                         <Fragment key={step.id}>
                           <div
@@ -2593,8 +2669,7 @@ export default function AdminApp() {
                             } ${draggedStepId === step.id ? "is-dragging" : ""} ${
                               dragOverStepId === step.id ? "is-drop-target" : ""
                             }`}
-                            ref={index === 0 ? stepsRowRef : undefined}
-                            draggable={!stepsReordering}
+                            draggable={!stepsReordering && !stepsLoading}
                             onDragStart={(event) => handleStepDragStart(event, step.id)}
                             onDragOver={(event) => handleStepDragOver(event, step.id)}
                             onDrop={(event) => handleStepDrop(event, step.id)}
@@ -2618,13 +2693,11 @@ export default function AdminApp() {
                                   event.stopPropagation();
                                   handleToggleStepForm(step);
                                 }}
-                                aria-expanded={
-                                  isExpanded
-                                }
+                                aria-expanded={isExpanded}
                                 aria-label={
                                   isExpanded ? "Collapse step" : "Expand step"
                                 }
-                                disabled={stepsReordering}
+                                disabled={stepsReordering || stepsLoading}
                               >
                                 <svg
                                   className={`triangle-toggle ${
@@ -2634,7 +2707,10 @@ export default function AdminApp() {
                                   aria-hidden="true"
                                   focusable="false"
                                 >
-                                  <polygon points="1,1 9,1 5,5" fill="currentColor" />
+                                  <polygon
+                                    points="1,1 9,1 5,5"
+                                    fill="currentColor"
+                                  />
                                 </svg>
                               </button>
                             </div>
@@ -2643,9 +2719,11 @@ export default function AdminApp() {
                         </Fragment>
                       );
                     })}
-                    {!stepsLoading &&
-                      !stepsError &&
-                      visibleSteps.length === 0 &&
+                    {stepsLoading && visibleSteps.length === 0 ? (
+                      <div className="empty-state compact">Loading steps...</div>
+                    ) : null}
+                    {visibleSteps.length === 0 &&
+                      !stepsLoading &&
                       !(stepFormOpen && stepMode === "create") && (
                         <div className="empty-state compact">No steps yet.</div>
                       )}
@@ -2654,14 +2732,22 @@ export default function AdminApp() {
 
                 <div className="games-footer">
                   <div className="games-count">Showing {visibleSteps.length} steps</div>
-                  {stepsReordering && <div className="status">Saving order...</div>}
+                  {stepsReordering && (
+                    <div className="status" role="status" aria-live="polite">
+                      Saving order...
+                    </div>
+                  )}
                 </div>
-                {stepMessage && <div className="status">{stepMessage}</div>}
+                {stepMessage && (
+                  <div className="status" role="status" aria-live="polite">
+                    {stepMessage}
+                  </div>
+                )}
               </>
             )}
           </div>
         </section>
       )}
-    </div>
+    </ShellLayout>
   );
 }

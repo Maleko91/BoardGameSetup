@@ -1,55 +1,17 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase, supabaseReady } from "../lib/supabase";
-
-type Visual = {
-  asset: string;
-  animation: string;
-};
-
-type Step = {
-  order: number;
-  text: string;
-  visual: Visual;
-};
-
-type StepCondition = {
-  playerCounts?: number[];
-  includeExpansions?: string[];
-  excludeExpansions?: string[];
-  includeModules?: string[];
-  excludeModules?: string[];
-  requireNoExpansions?: boolean;
-};
-
-type ConditionalStep = Step & {
-  when?: StepCondition;
-};
-
-type Expansion = {
-  id: string;
-  name: string;
-};
-
-type ExpansionModule = {
-  id: string;
-  name: string;
-  description?: string;
-};
-
-type GameData = {
-  id: string;
-  title: string;
-  playerCounts: number[];
-  expansions?: Expansion[];
-  common: Step[];
-  byPlayerCount: Record<string, Step[]>;
-  conditionalSteps?: ConditionalStep[];
-  expansionModules?: Record<string, ExpansionModule[]>;
-  rulesUrl?: string;
-};
+import type {
+  ConditionalStep,
+  ExpansionModule,
+  GameData,
+  ModuleRow,
+  Step,
+  StepCondition
+} from "../types/game";
 
 const DEFAULT_GAME = "cascadia";
+const BASE_MODULE_KEY = "__base__";
 
 export default function GameSetupPage() {
   const { gameId } = useParams<{ gameId: string }>();
@@ -63,6 +25,9 @@ export default function GameSetupPage() {
   const [expansionMenuOpen, setExpansionMenuOpen] = useState(false);
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [playerIndex, setPlayerIndex] = useState(0);
+  const expansionMenuRef = useRef<HTMLDivElement | null>(null);
+  const expansionToggleRef = useRef<HTMLButtonElement | null>(null);
+  const expansionMenuId = useId();
 
   useEffect(() => {
     if (!resolvedGameId) {
@@ -96,56 +61,75 @@ export default function GameSetupPage() {
           );
         }
 
-        const { data: expansions, error: expansionsError } = await client
-          .from("expansions")
-          .select("id, name")
-          .eq("game_id", resolvedGameId);
+        const [
+          { data: expansions, error: expansionsError },
+          { data: steps, error: stepsError }
+        ] = await Promise.all([
+          client
+            .from("expansions")
+            .select("id, name")
+            .eq("game_id", resolvedGameId),
+          client
+            .from("steps")
+            .select(
+              "step_order, text, visual_asset, visual_animation, player_counts, include_expansions, exclude_expansions, include_modules, exclude_modules, require_no_expansions"
+            )
+            .eq("game_id", resolvedGameId)
+            .order("step_order", { ascending: true })
+        ]);
 
         if (expansionsError) {
           throw new Error(expansionsError.message);
         }
-
-        const expansionIds = (expansions ?? []).map((expansion) => expansion.id);
-        const { data: modules, error: modulesError } = expansionIds.length
-          ? await client
-              .from("expansion_modules")
-              .select("id, expansion_id, name, description")
-              .in("expansion_id", expansionIds)
-          : { data: [], error: null };
-
-        if (modulesError) {
-          throw new Error(modulesError.message);
-        }
-
-        const { data: steps, error: stepsError } = await client
-          .from("steps")
-          .select(
-            "step_order, text, visual_asset, visual_animation, player_counts, include_expansions, exclude_expansions, include_modules, exclude_modules, require_no_expansions"
-          )
-          .eq("game_id", resolvedGameId)
-          .order("step_order", { ascending: true });
-
         if (stepsError) {
           throw new Error(stepsError.message);
         }
+
+        const expansionIds = (expansions ?? []).map((expansion) => expansion.id);
+        const [expansionModulesResult, baseModulesResult] = await Promise.all([
+          expansionIds.length
+            ? client
+                .from("expansion_modules")
+                .select("id, expansion_id, name, description")
+                .in("expansion_id", expansionIds)
+            : Promise.resolve({ data: [], error: null }),
+          client
+            .from("expansion_modules")
+            .select("id, expansion_id, name, description")
+            .is("expansion_id", null)
+        ]);
+
+        if (expansionModulesResult.error) {
+          throw new Error(expansionModulesResult.error.message);
+        }
+        if (baseModulesResult.error) {
+          throw new Error(baseModulesResult.error.message);
+        }
+
+        const modules: ModuleRow[] = [
+          ...((expansionModulesResult.data ?? []) as ModuleRow[]),
+          ...((baseModulesResult.data ?? []) as ModuleRow[])
+        ];
 
         const playerCounts = Array.from(
           { length: gameRow.players_max - gameRow.players_min + 1 },
           (_, index) => gameRow.players_min + index
         );
 
-        const expansionModules = (modules ?? []).reduce<
-          Record<string, ExpansionModule[]>
-        >((acc, module) => {
-          const list = acc[module.expansion_id] ?? [];
-          list.push({
-            id: module.id,
-            name: module.name,
-            description: module.description ?? undefined
-          });
-          acc[module.expansion_id] = list;
-          return acc;
-        }, {});
+        const expansionModules = modules.reduce<Record<string, ExpansionModule[]>>(
+          (acc, module) => {
+            const key = module.expansion_id ?? BASE_MODULE_KEY;
+            const list = acc[key] ?? [];
+            list.push({
+              id: module.id,
+              name: module.name,
+              description: module.description ?? undefined
+            });
+            acc[key] = list;
+            return acc;
+          },
+          {}
+        );
 
         const common: Step[] = [];
         const conditionalSteps: ConditionalStep[] = [];
@@ -230,14 +214,32 @@ export default function GameSetupPage() {
   }, [resolvedGameId]);
 
   useEffect(() => {
+    if (!expansionMenuOpen) {
+      return;
+    }
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setExpansionMenuOpen(false);
+        expansionToggleRef.current?.focus();
+      }
+    };
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [expansionMenuOpen]);
+
+  useEffect(() => {
     if (!game?.expansionModules) {
       setSelectedModules([]);
       return;
     }
+    const baseModules = game.expansionModules?.[BASE_MODULE_KEY] ?? [];
+    const expansionModules = selectedExpansions.flatMap(
+      (expansionId) => game.expansionModules?.[expansionId] ?? []
+    );
     const allowed = new Set(
-      selectedExpansions.flatMap(
-        (expansionId) => game.expansionModules?.[expansionId] ?? []
-      ).map((module) => module.id)
+      [...baseModules, ...expansionModules].map((module) => module.id)
     );
     setSelectedModules((current) => current.filter((id) => allowed.has(id)));
   }, [game, selectedExpansions]);
@@ -325,9 +327,18 @@ export default function GameSetupPage() {
     if (!game?.expansionModules) {
       return [];
     }
-    return selectedExpansions.flatMap(
+    const baseModules = game.expansionModules?.[BASE_MODULE_KEY] ?? [];
+    const expansionModules = selectedExpansions.flatMap(
       (expansionId) => game.expansionModules?.[expansionId] ?? []
     );
+    const seen = new Set<string>();
+    return [...baseModules, ...expansionModules].filter((module) => {
+      if (seen.has(module.id)) {
+        return false;
+      }
+      seen.add(module.id);
+      return true;
+    });
   }, [game, selectedExpansions]);
 
   const expansionSummaryLabel = useMemo(() => {
@@ -413,13 +424,15 @@ export default function GameSetupPage() {
               onClick={() => setExpansionMenuOpen((open) => !open)}
               disabled={!game?.expansions?.length}
               aria-expanded={expansionMenuOpen}
+              aria-controls={expansionMenuId}
+              ref={expansionToggleRef}
             >
               {expansionSummaryLabel}
             </button>
           </div>
         </div>
         {expansionMenuOpen && (
-          <div className="dropdown-panel">
+          <div className="dropdown-panel" id={expansionMenuId} ref={expansionMenuRef}>
             {game?.expansions?.length ? (
               game.expansions.map((expansion) => {
                 const checked = selectedExpansions.includes(expansion.id);
@@ -470,8 +483,16 @@ export default function GameSetupPage() {
         )}
       </div>
 
-      {gameLoading && <div className="status">Loading setup steps...</div>}
-      {gameError && <div className="status error">{gameError}</div>}
+      {gameLoading && (
+        <div className="status" role="status" aria-live="polite">
+          Loading setup steps...
+        </div>
+      )}
+      {gameError && (
+        <div className="status error" role="alert">
+          {gameError}
+        </div>
+      )}
 
       {!gameLoading && !gameError && (
         <div className="steps-grid">

@@ -1,15 +1,11 @@
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-  type FormEvent
-} from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { supabase, supabaseReady } from "../lib/supabase";
 import { useSession } from "../context/SessionContext";
+import AuthForm, { type AuthMode } from "./profile/AuthForm";
+import RecoveryForm from "./profile/RecoveryForm";
+import ProfileSettings from "./profile/ProfileSettings";
+import DangerZone from "./profile/DangerZone";
 
 type UserProfileRow = {
   id: string;
@@ -26,7 +22,7 @@ const PROFILE_SELECT =
 export default function ProfilePage() {
   const { session, authLoading } = useSession();
   const [authSubmitting, setAuthSubmitting] = useState(false);
-  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [authMode, setAuthMode] = useState<AuthMode>("login");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
   const [authDisplayName, setAuthDisplayName] = useState("");
@@ -47,7 +43,6 @@ export default function ProfilePage() {
   const [profileNotice, setProfileNotice] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileDeleting, setProfileDeleting] = useState(false);
-  const authTabsRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!session) {
@@ -165,49 +160,6 @@ export default function ProfilePage() {
     }
   }, []);
 
-  const updateAuthHighlight = useCallback((target: HTMLElement | null) => {
-    const tabs = authTabsRef.current;
-    if (!tabs) {
-      return;
-    }
-    if (!target) {
-      tabs.style.setProperty("--auth-highlight-opacity", "0");
-      return;
-    }
-    const tabsRect = tabs.getBoundingClientRect();
-    const targetRect = target.getBoundingClientRect();
-    const left = targetRect.left - tabsRect.left;
-    tabs.style.setProperty("--auth-highlight-left", `${left}px`);
-    tabs.style.setProperty("--auth-highlight-width", `${targetRect.width}px`);
-    tabs.style.setProperty("--auth-highlight-opacity", "1");
-  }, []);
-
-  const resetAuthHighlight = useCallback(() => {
-    const tabs = authTabsRef.current;
-    if (!tabs) {
-      return;
-    }
-    const active = tabs.querySelector<HTMLElement>(".auth-tab.active");
-    updateAuthHighlight(active);
-  }, [updateAuthHighlight]);
-
-  useLayoutEffect(() => {
-    if (session || authLoading) {
-      return;
-    }
-    resetAuthHighlight();
-  }, [authLoading, authMode, resetAuthHighlight, session]);
-
-  useEffect(() => {
-    const handleResize = () => {
-      resetAuthHighlight();
-    };
-    window.addEventListener("resize", handleResize);
-    return () => {
-      window.removeEventListener("resize", handleResize);
-    };
-  }, [resetAuthHighlight]);
-
   const profileEmail = useMemo(
     () => userProfile?.email ?? session?.user?.email ?? "",
     [session, userProfile]
@@ -239,7 +191,7 @@ export default function ProfilePage() {
     window.history.replaceState(null, "", url.pathname + url.search);
   };
 
-  const handleAuthModeChange = (mode: "login" | "signup") => {
+  const handleAuthModeChange = (mode: AuthMode) => {
     setAuthMode(mode);
     setAuthError("");
     setAuthNotice("");
@@ -493,61 +445,28 @@ export default function ProfilePage() {
   return (
     <section className="stage">
       {!supabaseReady && (
-        <div className="status error">Missing Supabase configuration.</div>
+        <div className="status error" role="alert">
+          Missing Supabase configuration.
+        </div>
       )}
       {supabaseReady && authLoading && (
-        <div className="status">Checking session...</div>
+        <div className="status" role="status" aria-live="polite">
+          Checking session...
+        </div>
       )}
       {supabaseReady && !authLoading && recoveryMode && (
-        <div className="panel auth-panel">
-          <div className="auth-header">
-            <div>
-              <h2>Reset password</h2>
-              <p className="hint">Enter a new password for your account.</p>
-            </div>
-          </div>
-          <form className="auth-form" onSubmit={handleRecoverySubmit}>
-            <label className="form-field">
-              <span>New password</span>
-              <input
-                type="password"
-                value={recoveryPassword}
-                onChange={(event) => setRecoveryPassword(event.target.value)}
-                autoComplete="new-password"
-                required
-              />
-            </label>
-            <label className="form-field">
-              <span>Confirm password</span>
-              <input
-                type="password"
-                value={recoveryConfirm}
-                onChange={(event) => setRecoveryConfirm(event.target.value)}
-                autoComplete="new-password"
-                required
-              />
-            </label>
-            <div className="auth-actions">
-              <button type="button" className="btn ghost" onClick={handleCancelRecovery}>
-                Back to sign in
-              </button>
-              <button
-                type="submit"
-                className="btn primary"
-                disabled={recoverySaving || !session}
-              >
-                {recoverySaving ? "Saving..." : "Save new password"}
-              </button>
-            </div>
-          </form>
-          {!session && (
-            <div className="status error">
-              Reset link expired or invalid. Request a new one.
-            </div>
-          )}
-          {recoveryError && <div className="status error">{recoveryError}</div>}
-          {recoveryNotice && <div className="status">{recoveryNotice}</div>}
-        </div>
+        <RecoveryForm
+          recoveryPassword={recoveryPassword}
+          recoveryConfirm={recoveryConfirm}
+          recoverySaving={recoverySaving}
+          recoveryError={recoveryError}
+          recoveryNotice={recoveryNotice}
+          hasSession={Boolean(session)}
+          onPasswordChange={setRecoveryPassword}
+          onConfirmChange={setRecoveryConfirm}
+          onCancel={handleCancelRecovery}
+          onSubmit={handleRecoverySubmit}
+        />
       )}
       {supabaseReady && !authLoading && !recoveryMode && session && (
         <div className="profile-stage">
@@ -561,61 +480,21 @@ export default function ProfilePage() {
             </div>
           </div>
 
-          <div className="panel profile-settings">
-            <div className="profile-settings-header">
-              <div>
-                <h2>Profile Settings</h2>
-                <p>Manage your account preferences</p>
-              </div>
-            </div>
-            {profileLoading && <div className="status">Loading profile...</div>}
-            <form
-              className="profile-form profile-settings-form"
-              onSubmit={handleProfileSave}
-            >
-              <label className="form-field">
-                <span>Display name</span>
-                <input
-                  type="text"
-                  value={profileName}
-                  onChange={(event) => {
-                    setProfileName(event.target.value);
-                    setProfileNameTouched(true);
-                  }}
-                  placeholder="Add a display name"
-                  autoComplete="name"
-                />
-              </label>
-              <label className="form-field">
-                <span>Email</span>
-                <input
-                  type="email"
-                  value={profileEmail}
-                  readOnly
-                  aria-readonly="true"
-                />
-              </label>
-              <div className="profile-settings-actions">
-                <button
-                  type="button"
-                  className="btn ghost profile-outline"
-                  onClick={handleSignOut}
-                  disabled={profileSaving || profileLoading || profileDeleting}
-                >
-                  Sign out
-                </button>
-                <button
-                  type="submit"
-                  className="btn primary"
-                  disabled={profileSaving || profileLoading || profileDeleting}
-                >
-                  {profileSaving ? "Saving..." : "Save changes"}
-                </button>
-              </div>
-            </form>
-            {profileError && <div className="status error">{profileError}</div>}
-            {profileNotice && <div className="status">{profileNotice}</div>}
-          </div>
+          <ProfileSettings
+            profileLoading={profileLoading}
+            profileName={profileName}
+            profileEmail={profileEmail}
+            profileSaving={profileSaving}
+            profileDeleting={profileDeleting}
+            profileError={profileError}
+            profileNotice={profileNotice}
+            onProfileNameChange={(value) => {
+              setProfileName(value);
+              setProfileNameTouched(true);
+            }}
+            onProfileSave={handleProfileSave}
+            onSignOut={handleSignOut}
+          />
 
           {isAdmin && (
             <div className="panel profile-admin">
@@ -642,111 +521,30 @@ export default function ProfilePage() {
             </div>
           )}
 
-          <div className="panel profile-danger">
-            <div className="profile-danger-row">
-              <div>
-                <h3>Danger Zone</h3>
-                <p>Permanently delete your account and all data.</p>
-              </div>
-              <button
-                type="button"
-                className="btn danger"
-                onClick={handleDeleteAccount}
-                disabled={profileDeleting || profileLoading}
-              >
-                {profileDeleting ? "Deleting..." : "Delete account"}
-              </button>
-            </div>
-          </div>
+          <DangerZone
+            profileDeleting={profileDeleting}
+            profileLoading={profileLoading}
+            onDelete={handleDeleteAccount}
+          />
         </div>
       )}
       {supabaseReady && !authLoading && !recoveryMode && !session && (
-        <div className="panel auth-panel">
-          <div className="auth-header">
-            <div className="auth-tabs" ref={authTabsRef}>
-              <span className="auth-highlight" aria-hidden="true" />
-              <button
-                type="button"
-                className={authMode === "login" ? "auth-tab active" : "auth-tab"}
-                onClick={() => handleAuthModeChange("login")}
-                aria-pressed={authMode === "login"}
-              >
-                Sign in
-              </button>
-              <button
-                type="button"
-                className={authMode === "signup" ? "auth-tab active" : "auth-tab"}
-                onClick={() => handleAuthModeChange("signup")}
-                aria-pressed={authMode === "signup"}
-              >
-                Create account
-              </button>
-            </div>
-            <p className="hint">
-              Sign in to save your profile settings across devices.
-            </p>
-          </div>
-          <form className="auth-form" onSubmit={handleAuthSubmit}>
-            {authMode === "signup" && (
-              <label className="form-field">
-                <span>Display name (optional)</span>
-                <input
-                  type="text"
-                  value={authDisplayName}
-                  onChange={(event) => setAuthDisplayName(event.target.value)}
-                  placeholder="How should we call you?"
-                  autoComplete="name"
-                />
-              </label>
-            )}
-            <label className="form-field">
-              <span>Email</span>
-              <input
-                type="email"
-                value={authEmail}
-                onChange={(event) => setAuthEmail(event.target.value)}
-                placeholder="you@email.com"
-                autoComplete="email"
-                required
-              />
-            </label>
-            <label className="form-field">
-              <span>Password</span>
-              <input
-                type="password"
-                value={authPassword}
-                onChange={(event) => setAuthPassword(event.target.value)}
-                autoComplete={authMode === "login" ? "current-password" : "new-password"}
-                required
-              />
-            </label>
-            <div className={authMode === "login" ? "auth-actions" : "auth-actions single"}>
-              {authMode === "login" && (
-                <button
-                  type="button"
-                  className="btn ghost"
-                  onClick={handlePasswordResetRequest}
-                  disabled={resetSending}
-                >
-                  {resetSending ? "Sending..." : "Reset password"}
-                </button>
-              )}
-              <button
-                type="submit"
-                className="btn primary"
-                disabled={authSubmitting}
-              >
-                {authSubmitting
-                  ? "Working..."
-                  : authMode === "login"
-                    ? "Sign in"
-                    : "Create account"}
-              </button>
-            </div>
-          </form>
-          {authError && <div className="status error">{authError}</div>}
-          {authNotice && <div className="status">{authNotice}</div>}
-        </div>
+        <AuthForm
+          authMode={authMode}
+          authEmail={authEmail}
+          authPassword={authPassword}
+          authDisplayName={authDisplayName}
+          authSubmitting={authSubmitting}
+          resetSending={resetSending}
+          authError={authError}
+          authNotice={authNotice}
+          onAuthModeChange={handleAuthModeChange}
+          onAuthEmailChange={setAuthEmail}
+          onAuthPasswordChange={setAuthPassword}
+          onAuthDisplayNameChange={setAuthDisplayName}
+          onAuthSubmit={handleAuthSubmit}
+          onPasswordReset={handlePasswordResetRequest}
+        />
       )}
     </section>
   );
