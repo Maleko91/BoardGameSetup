@@ -198,17 +198,9 @@ export default function HomePage() {
       }
     };
 
-    if ("addEventListener" in motionQuery) {
-      motionQuery.addEventListener("change", handleMotionChange);
-      return () => {
-        motionQuery.removeEventListener("change", handleMotionChange);
-        stopAnimation();
-      };
-    }
-
-    motionQuery.addListener(handleMotionChange);
+    motionQuery.addEventListener("change", handleMotionChange);
     return () => {
-      motionQuery.removeListener(handleMotionChange);
+      motionQuery.removeEventListener("change", handleMotionChange);
       stopAnimation();
     };
   }, []);

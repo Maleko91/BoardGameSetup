@@ -1,16 +1,16 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
-import type { Session } from "@supabase/supabase-js";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import AdminApp from "../AdminApp";
 import { SessionProvider } from "../context/SessionContext";
 import { supabaseMock, supabaseMockState } from "../test/supabaseMock";
+import { createSession } from "../test/sessionFixtures";
 
 const seedAdminData = () => {
   supabaseMock.setReady(true);
-  supabaseMock.setSession({
-    user: { id: "user-1", email: "admin@example.com" }
-  } as Session);
+  supabaseMock.setSession(
+    createSession({ id: "user-1", email: "admin@example.com" })
+  );
 
   supabaseMock.enqueueResponse("users", "maybeSingle", {
     data: { is_admin: true },
@@ -147,7 +147,7 @@ describe("AdminApp", () => {
     const modulesPanel = screen
       .getByRole("heading", { name: "Modules" })
       .closest(".modules-panel");
-    if (!modulesPanel) {
+    if (!(modulesPanel instanceof HTMLElement)) {
       throw new Error("Modules panel not found.");
     }
 
