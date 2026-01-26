@@ -384,72 +384,87 @@ export default function GameSetupPage() {
   return (
     <section className="stage">
       <div className="panel summary-panel">
-        <div className="summary-row">
-          <span>Game</span>
-          <strong>{game?.title ?? "-"}</strong>
-        </div>
-        <div className="summary-row">
-          <span>Players</span>
-          <div className="summary-player">
-            <button
-              type="button"
-              className="icon-btn small"
-              onClick={decrementPlayer}
-              disabled={!sortedPlayerCounts.length || playerIndex === 0}
-              aria-label="Decrease players"
-            >
-              -
-            </button>
-            <span className="player-count small">{playerCount ?? "-"}</span>
-            <button
-              type="button"
-              className="icon-btn small"
-              onClick={incrementPlayer}
-              disabled={
-                !sortedPlayerCounts.length ||
-                playerIndex >= sortedPlayerCounts.length - 1
-              }
-              aria-label="Increase players"
-            >
-              +
-            </button>
+        <div className="summary-top">
+          <div className="summary-tile">
+            <div className="summary-tile-row">
+              <span className="summary-label">Game</span>
+              <strong className="summary-value">{game?.title ?? "-"}</strong>
+            </div>
           </div>
-        </div>
-        <div className="summary-row">
-          <span>Expansions</span>
-          <div className="dropdown">
-            <button
-              type="button"
-              className={expansionMenuOpen ? "dropdown-toggle open" : "dropdown-toggle"}
-              onClick={() => setExpansionMenuOpen((open) => !open)}
-              disabled={!game?.expansions?.length}
-              aria-expanded={expansionMenuOpen}
-              aria-controls={expansionMenuId}
-              ref={expansionToggleRef}
-            >
-              {expansionSummaryLabel}
-            </button>
+          <div className="summary-tile">
+            <div className="summary-tile-row">
+              <span className="summary-label">Players</span>
+              <div className="summary-player">
+                <button
+                  type="button"
+                  className="icon-btn small"
+                  onClick={decrementPlayer}
+                  disabled={!sortedPlayerCounts.length || playerIndex === 0}
+                  aria-label="Decrease players"
+                >
+                  -
+                </button>
+                <span className="player-count small">{playerCount ?? "-"}</span>
+                <button
+                  type="button"
+                  className="icon-btn small"
+                  onClick={incrementPlayer}
+                  disabled={
+                    !sortedPlayerCounts.length ||
+                    playerIndex >= sortedPlayerCounts.length - 1
+                  }
+                  aria-label="Increase players"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="summary-tile">
+            <div className="summary-tile-row">
+              <span className="summary-label">Expansions</span>
+              <div className="dropdown">
+                <button
+                  type="button"
+                  className={expansionMenuOpen ? "dropdown-toggle open" : "dropdown-toggle"}
+                  onClick={() => setExpansionMenuOpen((open) => !open)}
+                  disabled={!game?.expansions?.length}
+                  aria-expanded={expansionMenuOpen}
+                  aria-controls={expansionMenuId}
+                  ref={expansionToggleRef}
+                >
+                  {expansionSummaryLabel}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
         {expansionMenuOpen && (
-          <div className="dropdown-panel" id={expansionMenuId} ref={expansionMenuRef}>
+          <div
+            className="summary-row modules expansions"
+            id={expansionMenuId}
+            ref={expansionMenuRef}
+          >
+            <span>Expansions</span>
             {game?.expansions?.length ? (
-              game.expansions.map((expansion) => {
-                const checked = selectedExpansions.includes(expansion.id);
-                return (
-                  <label
-                    key={expansion.id}
-                    className={checked ? "dropdown-item selected" : "dropdown-item"}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleExpansion(expansion.id)}
-                    />
-                    <span>{expansion.name}</span>
-                  </label>
-                );
-              })
+              <div className="expansion-grid">
+                {game.expansions.map((expansion) => {
+                  const checked = selectedExpansions.includes(expansion.id);
+                  return (
+                    <label
+                      key={expansion.id}
+                      className={checked ? "dropdown-item selected" : "dropdown-item"}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => toggleExpansion(expansion.id)}
+                      />
+                      <span>{expansion.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
             ) : (
               <div className="empty-state">No expansions listed yet.</div>
             )}
