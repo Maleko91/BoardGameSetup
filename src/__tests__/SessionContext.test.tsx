@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
-import type { Session } from "@supabase/supabase-js";
 import { SessionProvider, useSession } from "../context/SessionContext";
 import { supabaseMock } from "../test/supabaseMock";
+import { createSession } from "../test/sessionFixtures";
 
 const SessionConsumer = () => {
   const { authLoading, session } = useSession();
@@ -57,9 +57,10 @@ describe("SessionContext", () => {
     });
     expect(screen.getByText("signed-out")).toBeInTheDocument();
 
-    supabaseMock.emitAuthChange("SIGNED_IN", {
-      user: { id: "user-1", email: "admin@example.com" }
-    } as Session);
+    supabaseMock.emitAuthChange(
+      "SIGNED_IN",
+      createSession({ id: "user-1", email: "admin@example.com" })
+    );
 
     await waitFor(() => {
       expect(screen.getByText("signed-in")).toBeInTheDocument();

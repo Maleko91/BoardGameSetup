@@ -1,10 +1,10 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
-import type { Session } from "@supabase/supabase-js";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import ProfilePage from "../pages/ProfilePage";
 import { SessionProvider } from "../context/SessionContext";
 import { supabaseMock } from "../test/supabaseMock";
+import { createSession } from "../test/sessionFixtures";
 
 const renderProfilePage = () =>
   render(
@@ -45,13 +45,13 @@ describe("ProfilePage", () => {
 
   it("loads and saves profile settings", async () => {
     supabaseMock.setReady(true);
-    supabaseMock.setSession({
-      user: {
+    supabaseMock.setSession(
+      createSession({
         id: "user-1",
         email: "player@example.com",
         user_metadata: { display_name: "Riley" }
-      }
-    } as Session);
+      })
+    );
 
     supabaseMock.enqueueResponse("users", "maybeSingle", {
       data: {
