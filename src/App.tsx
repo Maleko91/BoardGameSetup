@@ -44,7 +44,7 @@ const AppShell = () => {
       return "";
     }
     if (isGamePage) {
-      return "Setup checklist";
+      return "";
     }
     return "Setup and Play";
   }, [isGamePage, isProfilePage, isRequestPage]);

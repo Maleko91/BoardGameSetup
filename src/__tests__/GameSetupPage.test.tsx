@@ -74,8 +74,7 @@ describe("GameSetupPage", () => {
     expect(await screen.findByText("Base Module")).toBeInTheDocument();
     expect(screen.queryByText("Expansion Module")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Base game only" }));
-    await user.click(screen.getByLabelText("Expansion One"));
+    await user.click(screen.getByRole("button", { name: /Expansion One/ }));
 
     expect(await screen.findByText("Expansion Module")).toBeInTheDocument();
   });
@@ -153,11 +152,10 @@ describe("GameSetupPage", () => {
     expect(screen.queryByText("With expansion")).not.toBeInTheDocument();
     expect(screen.queryByText("With base module")).not.toBeInTheDocument();
 
-    await user.click(screen.getByLabelText("Base Module"));
+    await user.click(screen.getByRole("button", { name: /Base Module/ }));
     expect(await screen.findByText("With base module")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Base game only" }));
-    await user.click(screen.getByLabelText("Expansion One"));
+    await user.click(screen.getByRole("button", { name: /Expansion One/ }));
 
     await waitFor(() => {
       expect(screen.queryByText("Base only")).not.toBeInTheDocument();
@@ -166,7 +164,7 @@ describe("GameSetupPage", () => {
     expect(screen.getByText("With base module")).toBeInTheDocument();
     expect(screen.getByText("Exclude expansion module")).toBeInTheDocument();
 
-    await user.click(screen.getByLabelText("Expansion Module"));
+    await user.click(screen.getByRole("button", { name: /Expansion Module/ }));
     await waitFor(() => {
       expect(
         screen.queryByText("Exclude expansion module")

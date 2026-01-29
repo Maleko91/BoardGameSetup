@@ -101,57 +101,59 @@ export default function ShellLayout({
   return (
     <div className={rootClassName}>
       <header className="masthead">
-        <div className="title-row">
-          <div className="nav-row">
-            <button
-              type="button"
-              className="nav-toggle"
-              onClick={handleToggleMenu}
-              aria-label="Toggle navigation"
-              aria-expanded={menuOpen}
-              aria-controls={navId}
-              ref={navToggleRef}
-            >
-              <span className="nav-toggle-icon" aria-hidden="true">
-                <img src={menuIcon} alt="" />
-              </span>
-            </button>
-            <nav
-              ref={navRef}
-              id={navId}
-              className={menuOpen ? "site-nav is-open" : "site-nav"}
-              aria-label={navLabel}
-              onMouseLeave={resetNavUnderline}
-              onBlur={handleNavBlur}
-            >
-              <span className="nav-underline" aria-hidden="true" />
-              {navItems.map((item) => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  className={item.isActive ? "nav-link active" : "nav-link"}
-                  aria-current={item.isActive ? "page" : undefined}
-                  onMouseEnter={(event) => updateNavUnderline(event.currentTarget)}
-                  onFocus={(event) => updateNavUnderline(event.currentTarget)}
-                  onClick={() => setMenuOpen(false)}
-                >
-                  {item.label}
-                </Link>
-              ))}
-            </nav>
-            <button
-              type="button"
-              className="theme-toggle"
-              onClick={handleToggleTheme}
-              aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-              data-next={theme === "dark" ? "light" : "dark"}
-            >
-              <img src={themeIcon} alt="" aria-hidden="true" className="theme-toggle-icon" />
-            </button>
-          </div>
-          {title ? <h1>{title}</h1> : null}
+        <div className="nav-row">
+          <button
+            type="button"
+            className="nav-toggle"
+            onClick={handleToggleMenu}
+            aria-label="Toggle navigation"
+            aria-expanded={menuOpen}
+            aria-controls={navId}
+            ref={navToggleRef}
+          >
+            <span className="nav-toggle-icon" aria-hidden="true">
+              <img src={menuIcon} alt="" />
+            </span>
+          </button>
+          <nav
+            ref={navRef}
+            id={navId}
+            className={menuOpen ? "site-nav is-open" : "site-nav"}
+            aria-label={navLabel}
+            onMouseLeave={resetNavUnderline}
+            onBlur={handleNavBlur}
+          >
+            <span className="nav-highlight" aria-hidden="true" />
+            {navItems.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={item.isActive ? "nav-link active" : "nav-link"}
+                aria-current={item.isActive ? "page" : undefined}
+                onMouseEnter={(event) => updateNavUnderline(event.currentTarget)}
+                onFocus={(event) => updateNavUnderline(event.currentTarget)}
+                onClick={() => setMenuOpen(false)}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+          <button
+            type="button"
+            className="theme-toggle"
+            onClick={handleToggleTheme}
+            aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            data-next={theme === "dark" ? "light" : "dark"}
+          >
+            <img src={themeIcon} alt="" aria-hidden="true" className="theme-toggle-icon" />
+          </button>
         </div>
-        {subtitle ? <p className="subtitle">{subtitle}</p> : null}
+        {title ? (
+          <div className="page-header">
+            <h1>{title}</h1>
+            {subtitle ? <p className="subtitle">{subtitle}</p> : null}
+          </div>
+        ) : null}
       </header>
 
       {children}

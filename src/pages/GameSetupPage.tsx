@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase, supabaseReady } from "../lib/supabase";
 import type {
@@ -22,12 +22,11 @@ export default function GameSetupPage() {
   const [gameLoading, setGameLoading] = useState(false);
   const [gameError, setGameError] = useState("");
   const [selectedExpansions, setSelectedExpansions] = useState<string[]>([]);
-  const [expansionMenuOpen, setExpansionMenuOpen] = useState(false);
   const [selectedModules, setSelectedModules] = useState<string[]>([]);
   const [playerIndex, setPlayerIndex] = useState(0);
-  const expansionMenuRef = useRef<HTMLDivElement | null>(null);
-  const expansionToggleRef = useRef<HTMLButtonElement | null>(null);
-  const expansionMenuId = useId();
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
+  const [isModulesCollapsing, setIsModulesCollapsing] = useState(false);
+  const progressRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!resolvedGameId) {
@@ -210,24 +209,8 @@ export default function GameSetupPage() {
     setSelectedExpansions([]);
     setSelectedModules([]);
     setPlayerIndex(0);
-    setExpansionMenuOpen(false);
+    setCompletedSteps(new Set());
   }, [resolvedGameId]);
-
-  useEffect(() => {
-    if (!expansionMenuOpen) {
-      return;
-    }
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setExpansionMenuOpen(false);
-        expansionToggleRef.current?.focus();
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [expansionMenuOpen]);
 
   useEffect(() => {
     if (!game?.expansionModules) {
@@ -314,14 +297,17 @@ export default function GameSetupPage() {
     );
   }, [game, playerCount, selectedExpansions, selectedModules]);
 
-  const selectedExpansionNames = useMemo(() => {
-    if (!game?.expansions?.length) {
-      return [];
-    }
-    return game.expansions
-      .filter((expansion) => selectedExpansions.includes(expansion.id))
-      .map((expansion) => expansion.name);
-  }, [game, selectedExpansions]);
+  // Clear completed steps that no longer exist
+  useEffect(() => {
+    setCompletedSteps((prev) => {
+      const max = steps.length;
+      const next = new Set<number>();
+      prev.forEach((i) => {
+        if (i < max) next.add(i);
+      });
+      return next.size === prev.size ? prev : next;
+    });
+  }, [steps]);
 
   const activeModules = useMemo(() => {
     if (!game?.expansionModules) {
@@ -341,25 +327,34 @@ export default function GameSetupPage() {
     });
   }, [game, selectedExpansions]);
 
-  const expansionSummaryLabel = useMemo(() => {
-    if (!selectedExpansionNames.length) {
-      return "Base game only";
+  // Track when modules section should collapse
+  const prevModulesLength = useRef(activeModules.length);
+  useEffect(() => {
+    if (activeModules.length < prevModulesLength.current && activeModules.length === 0) {
+      setIsModulesCollapsing(true);
+      const timer = setTimeout(() => {
+        setIsModulesCollapsing(false);
+      }, 350); // Match animation duration
+      return () => clearTimeout(timer);
     }
-    if (selectedExpansionNames.length === 1) {
-      return selectedExpansionNames[0];
-    }
-    return "Multiple";
-  }, [selectedExpansionNames]);
+    prevModulesLength.current = activeModules.length;
+  }, [activeModules.length]);
 
-  const decrementPlayer = () => {
-    setPlayerIndex((index) => Math.max(index - 1, 0));
-  };
+  const completionPercent = steps.length > 0
+    ? Math.round((completedSteps.size / steps.length) * 100)
+    : 0;
 
-  const incrementPlayer = () => {
-    setPlayerIndex((index) =>
-      Math.min(index + 1, sortedPlayerCounts.length - 1)
-    );
-  };
+  const toggleStepComplete = useCallback((index: number) => {
+    setCompletedSteps((prev) => {
+      const next = new Set(prev);
+      if (next.has(index)) {
+        next.delete(index);
+      } else {
+        next.add(index);
+      }
+      return next;
+    });
+  }, []);
 
   const toggleExpansion = (id: string) => {
     setSelectedExpansions((current) =>
@@ -383,114 +378,119 @@ export default function GameSetupPage() {
 
   return (
     <section className="stage">
-      <div className="panel summary-panel">
-        <div className="summary-top">
-          <div className="summary-tile">
-            <div className="summary-tile-row">
-              <span className="summary-label">Game</span>
-              <strong className="summary-value">{game?.title ?? "-"}</strong>
-            </div>
+      {/* Setup header panel */}
+      <div className="panel setup-header">
+        <div className="setup-title-row">
+          <div className="setup-title-group">
+            <span className="setup-eyebrow">Now setting up</span>
+            <h2 className="setup-game-name">{game?.title ?? "Loading..."}</h2>
           </div>
-          <div className="summary-tile">
-            <div className="summary-tile-row">
-              <span className="summary-label">Players</span>
-              <div className="summary-player">
-                <button
-                  type="button"
-                  className="icon-btn small"
-                  onClick={decrementPlayer}
-                  disabled={!sortedPlayerCounts.length || playerIndex === 0}
-                  aria-label="Decrease players"
-                >
-                  -
-                </button>
-                <span className="player-count small">{playerCount ?? "-"}</span>
-                <button
-                  type="button"
-                  className="icon-btn small"
-                  onClick={incrementPlayer}
-                  disabled={
-                    !sortedPlayerCounts.length ||
-                    playerIndex >= sortedPlayerCounts.length - 1
-                  }
-                  aria-label="Increase players"
-                >
-                  +
-                </button>
-              </div>
-            </div>
-          </div>
-          <div className="summary-tile">
-            <div className="summary-tile-row">
-              <span className="summary-label">Expansions</span>
-              <div className="dropdown">
-                <button
-                  type="button"
-                  className={expansionMenuOpen ? "dropdown-toggle open" : "dropdown-toggle"}
-                  onClick={() => setExpansionMenuOpen((open) => !open)}
-                  disabled={!game?.expansions?.length}
-                  aria-expanded={expansionMenuOpen}
-                  aria-controls={expansionMenuId}
-                  ref={expansionToggleRef}
-                >
-                  {expansionSummaryLabel}
-                </button>
-              </div>
-            </div>
-          </div>
+          {game?.rulesUrl && (
+            <a
+              className="btn ghost small"
+              href={game.rulesUrl}
+              target="_blank"
+              rel="noreferrer"
+            >
+              View rules
+            </a>
+          )}
         </div>
-        {expansionMenuOpen && (
-          <div
-            className="summary-row modules expansions"
-            id={expansionMenuId}
-            ref={expansionMenuRef}
-          >
-            <span>Expansions</span>
-            {game?.expansions?.length ? (
-              <div className="expansion-grid">
-                {game.expansions.map((expansion) => {
-                  const checked = selectedExpansions.includes(expansion.id);
-                  return (
-                    <label
-                      key={expansion.id}
-                      className={checked ? "dropdown-item selected" : "dropdown-item"}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => toggleExpansion(expansion.id)}
-                      />
-                      <span>{expansion.name}</span>
-                    </label>
-                  );
-                })}
-              </div>
-            ) : (
-              <div className="empty-state">No expansions listed yet.</div>
-            )}
+
+        {/* Player count chips */}
+        {sortedPlayerCounts.length > 0 && (
+          <div className="setup-section">
+            <span className="setup-label">Players</span>
+            <div className="player-chips">
+              {sortedPlayerCounts.map((count, idx) => (
+                <button
+                  key={count}
+                  type="button"
+                  className={
+                    idx === playerIndex ? "player-chip active" : "player-chip"
+                  }
+                  onClick={(e) => {
+                    setPlayerIndex(idx);
+                    e.currentTarget.blur();
+                  }}
+                  aria-label={`${count} player${count !== 1 ? "s" : ""}`}
+                  aria-pressed={idx === playerIndex}
+                >
+                  {count}
+                </button>
+              ))}
+            </div>
           </div>
         )}
-        {activeModules.length > 0 && (
-          <div className="summary-row modules">
-            <span>Exploration modules</span>
-            <div className="module-grid">
+
+        {/* Expansion chips */}
+        {(game?.expansions?.length ?? 0) > 0 && (
+          <div className="setup-section">
+            <div className="setup-label-row">
+              <span className="setup-label">Expansions</span>
+              {selectedExpansions.length > 0 && (
+                <span className="setup-badge">
+                  {selectedExpansions.length} selected
+                </span>
+              )}
+            </div>
+            <div className="expansion-chips">
+              {(game?.expansions ?? []).map((expansion) => {
+                const checked = selectedExpansions.includes(expansion.id);
+                return (
+                  <button
+                    key={expansion.id}
+                    type="button"
+                    className={
+                      checked ? "expansion-chip active" : "expansion-chip"
+                    }
+                    onClick={(e) => {
+                      toggleExpansion(expansion.id);
+                      e.currentTarget.blur();
+                    }}
+                    aria-pressed={checked}
+                  >
+                    <span className="chip-indicator" aria-hidden="true">
+                      {checked ? "\u2713" : "+"}
+                    </span>
+                    <span className="chip-text">{expansion.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Module chips */}
+        {(activeModules.length > 0 || isModulesCollapsing) && (
+          <div className={`setup-section modules-section ${isModulesCollapsing ? 'collapsing' : ''}`}>
+            <span className="setup-label">Modules</span>
+            <div className="module-chips">
               {activeModules.map((module) => {
                 const checked = selectedModules.includes(module.id);
                 return (
-                  <label
+                  <button
                     key={module.id}
-                    className={checked ? "module-toggle selected" : "module-toggle"}
+                    type="button"
+                    className={
+                      checked ? "module-chip active" : "module-chip"
+                    }
+                    onClick={(e) => {
+                      toggleModule(module.id);
+                      e.currentTarget.blur();
+                    }}
+                    aria-pressed={checked}
                   >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleModule(module.id)}
-                    />
-                    <span>
-                      {module.name}
-                      {module.description ? <em>{module.description}</em> : null}
+                    <span className="chip-indicator" aria-hidden="true">
+                      {checked ? "\u2713" : "+"}
                     </span>
-                  </label>
+                    <span className="module-chip-content">
+                      <span className="chip-text">{module.name}</span>
+                      {module.description && (
+                        <span className="chip-desc">{module.description}</span>
+                      )}
+                    </span>
+                  </button>
                 );
               })}
             </div>
@@ -498,6 +498,7 @@ export default function GameSetupPage() {
         )}
       </div>
 
+      {/* Loading / error */}
       {gameLoading && (
         <div className="status" role="status" aria-live="polite">
           Loading setup steps...
@@ -509,13 +510,63 @@ export default function GameSetupPage() {
         </div>
       )}
 
+      {/* Progress bar */}
+      {!gameLoading && !gameError && steps.length > 0 && (
+        <div className="progress-sticky" ref={progressRef}>
+          <div className="progress-track">
+            <div
+              className="progress-fill"
+              style={{ width: `${completionPercent}%` }}
+              role="progressbar"
+              aria-valuenow={completionPercent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            />
+          </div>
+          <div className="progress-info">
+            <span className="progress-label">
+              {completedSteps.size} of {steps.length} completed
+            </span>
+            <span className="progress-percent">{completionPercent}%</span>
+          </div>
+        </div>
+      )}
+
+      {/* Steps grid */}
       {!gameLoading && !gameError && (
         <div className="steps-grid">
           {steps.length ? (
             steps.map((step, index) => (
-              <article className="step-card" key={`${step.order}-${index}`}>
+              <article
+                className={
+                  completedSteps.has(index)
+                    ? "step-card completed"
+                    : "step-card"
+                }
+                key={`${step.order}-${index}`}
+                onClick={() => toggleStepComplete(index)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    toggleStepComplete(index);
+                  }
+                }}
+                role="button"
+                tabIndex={0}
+                aria-pressed={completedSteps.has(index)}
+              >
                 <div className="step-body">
-                  <div className="step-index">Step {index + 1}</div>
+                  <div className="step-header-row">
+                    <span className="step-index">Step {index + 1}</span>
+                    <span
+                      className={
+                        completedSteps.has(index)
+                          ? "step-check checked"
+                          : "step-check"
+                      }
+                      aria-hidden="true"
+                    />
+                  </div>
                   <p>{step.text}</p>
                 </div>
               </article>
@@ -526,16 +577,8 @@ export default function GameSetupPage() {
         </div>
       )}
 
-      <div className="stage-actions">
-        {game?.rulesUrl ? (
-          <a className="btn ghost" href={game.rulesUrl} target="_blank" rel="noreferrer">
-            Rules
-          </a>
-        ) : (
-          <button type="button" className="btn ghost" disabled>
-            Rules
-          </button>
-        )}
+      {/* Bottom actions */}
+      <div className="stage-actions single">
         <button type="button" className="btn primary" onClick={handleGoHome}>
           Choose another game
         </button>
