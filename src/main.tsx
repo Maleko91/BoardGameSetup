@@ -15,31 +15,6 @@ initializeTheme();
 
 const AdminApp = lazy(() => import("./AdminApp"));
 
-const hashPath = window.location.hash.replace("#", "");
-if (hashPath.startsWith("/")) {
-  const queryIndex = hashPath.indexOf("?");
-  const pathPart = queryIndex >= 0 ? hashPath.slice(0, queryIndex) : hashPath;
-  const queryPart = queryIndex >= 0 ? hashPath.slice(queryIndex + 1) : "";
-  const normalized = pathPart === "" ? "/" : pathPart;
-  const isKnownRoute =
-    normalized === "/" ||
-    normalized.startsWith("/admin") ||
-    normalized.startsWith("/profile") ||
-    normalized.startsWith("/request") ||
-    normalized.startsWith("/game/");
-  if (isKnownRoute) {
-    const baseUrl = import.meta.env.BASE_URL ?? "/";
-    const normalizedBase = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
-    const base = new URL(normalizedBase, window.location.origin);
-    const nextPath = normalized === "/" ? "" : normalized.replace(/^\/+/, "");
-    const nextUrl = new URL(nextPath, base);
-    if (queryPart) {
-      nextUrl.search = queryPart;
-    }
-    window.history.replaceState(null, "", `${nextUrl.pathname}${nextUrl.search}`);
-  }
-}
-
 const router = createBrowserRouter(
   [
     {
@@ -68,7 +43,7 @@ const router = createBrowserRouter(
     },
     { path: "*", element: <Navigate to="/" replace /> }
   ],
-  { basename: import.meta.env.BASE_URL }
+  { basename: "/" }
 );
 
 const container = document.getElementById("root");
