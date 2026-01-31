@@ -3,7 +3,11 @@
     "allow": [
       "Bash(npx tsc:*)",
       "Bash(npx vite build)",
-      "Bash(npx vitest run)"
+      "Bash(npx vitest run)",
+      "Bash(npm run build:*)",
+      "Bash(npm test:*)",
+      "Bash(npx skills:*)",
+      "Bash(dir:*)"
     ]
   }
 }

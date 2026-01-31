@@ -7,6 +7,11 @@ const AppShell = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
+  // Scroll to top on route change
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
+
   useEffect(() => {
     const page = searchParams.get("page");
     const game = searchParams.get("game");

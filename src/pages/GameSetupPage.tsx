@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase, supabaseReady } from "../lib/supabase";
 import type {
@@ -12,6 +12,7 @@ import type {
 
 const DEFAULT_GAME = "cascadia";
 const BASE_MODULE_KEY = "__base__";
+const MODULES_COLLAPSE_DURATION = 700;
 
 export default function GameSetupPage() {
   const { gameId } = useParams<{ gameId: string }>();
@@ -26,6 +27,9 @@ export default function GameSetupPage() {
   const [playerIndex, setPlayerIndex] = useState(0);
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [isModulesCollapsing, setIsModulesCollapsing] = useState(false);
+  const [collapsingModules, setCollapsingModules] = useState<ExpansionModule[]>([]);
+  const modulesRef = useRef<HTMLDivElement | null>(null);
+  const collapseTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
   const progressRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -327,22 +331,67 @@ export default function GameSetupPage() {
     });
   }, [game, selectedExpansions]);
 
+  // Snapshot modules before they go empty, so we can show them during collapse
+  const prevModulesRef = useRef<ExpansionModule[]>(activeModules);
+  if (activeModules.length > 0) {
+    prevModulesRef.current = activeModules;
+  }
+
   // Track when modules section should collapse
   const prevModulesLength = useRef(activeModules.length);
-  useEffect(() => {
-    if (activeModules.length < prevModulesLength.current && activeModules.length === 0) {
-      setIsModulesCollapsing(true);
-      const timer = setTimeout(() => {
-        setIsModulesCollapsing(false);
-      }, 350); // Match animation duration
-      return () => clearTimeout(timer);
-    }
+  useLayoutEffect(() => {
+    const previousLength = prevModulesLength.current;
     prevModulesLength.current = activeModules.length;
+
+    if (activeModules.length > 0) {
+      if (collapseTimerRef.current) {
+        window.clearTimeout(collapseTimerRef.current);
+        collapseTimerRef.current = null;
+      }
+      setIsModulesCollapsing(false);
+      setCollapsingModules((current) => (current.length > 0 ? [] : current));
+      const el = modulesRef.current;
+      if (el) el.style.maxHeight = "";
+      return;
+    }
+
+    if (activeModules.length === 0 && previousLength > 0) {
+      const el = modulesRef.current;
+      if (el) {
+        el.style.maxHeight = `${el.scrollHeight}px`;
+        el.getBoundingClientRect();
+      }
+      setCollapsingModules(prevModulesRef.current);
+      setIsModulesCollapsing(true);
+      if (collapseTimerRef.current) {
+        window.clearTimeout(collapseTimerRef.current);
+      }
+      collapseTimerRef.current = window.setTimeout(() => {
+        setIsModulesCollapsing(false);
+        setCollapsingModules([]);
+        if (el) el.style.maxHeight = "";
+        collapseTimerRef.current = null;
+      }, MODULES_COLLAPSE_DURATION);
+    }
   }, [activeModules.length]);
 
   const completionPercent = steps.length > 0
     ? Math.round((completedSteps.size / steps.length) * 100)
     : 0;
+  const isPendingModulesCollapse =
+    activeModules.length === 0 && prevModulesLength.current > 0;
+  const shouldRenderModules =
+    activeModules.length > 0 ||
+    isModulesCollapsing ||
+    collapsingModules.length > 0 ||
+    isPendingModulesCollapse;
+  const modulesToRender = shouldRenderModules
+    ? activeModules.length > 0
+      ? activeModules
+      : collapsingModules.length > 0
+        ? collapsingModules
+        : prevModulesRef.current
+    : [];
 
   const toggleStepComplete = useCallback((index: number) => {
     setCompletedSteps((prev) => {
@@ -446,7 +495,11 @@ export default function GameSetupPage() {
                     }
                     onClick={(e) => {
                       toggleExpansion(expansion.id);
-                      e.currentTarget.blur();
+                      if (window.matchMedia("(hover: none) and (pointer: coarse)").matches) {
+                        window.setTimeout(() => e.currentTarget.blur(), 0);
+                      } else {
+                        e.currentTarget.blur();
+                      }
                     }}
                     aria-pressed={checked}
                   >
@@ -462,37 +515,39 @@ export default function GameSetupPage() {
         )}
 
         {/* Module chips */}
-        {(activeModules.length > 0 || isModulesCollapsing) && (
-          <div className={`setup-section modules-section ${isModulesCollapsing ? 'collapsing' : ''}`}>
-            <span className="setup-label">Modules</span>
-            <div className="module-chips">
-              {activeModules.map((module) => {
-                const checked = selectedModules.includes(module.id);
-                return (
-                  <button
-                    key={module.id}
-                    type="button"
-                    className={
-                      checked ? "module-chip active" : "module-chip"
-                    }
-                    onClick={(e) => {
-                      toggleModule(module.id);
-                      e.currentTarget.blur();
-                    }}
-                    aria-pressed={checked}
-                  >
-                    <span className="chip-indicator" aria-hidden="true">
-                      {checked ? "\u2713" : "+"}
-                    </span>
-                    <span className="module-chip-content">
-                      <span className="chip-text">{module.name}</span>
-                      {module.description && (
-                        <span className="chip-desc">{module.description}</span>
-                      )}
-                    </span>
-                  </button>
-                );
-              })}
+        {shouldRenderModules && (
+          <div ref={modulesRef} className={`modules-section ${isModulesCollapsing ? 'collapsing' : ''}`}>
+            <div className="modules-inner">
+              <span className="setup-label">Modules</span>
+              <div className="module-chips">
+                {modulesToRender.map((module) => {
+                  const checked = selectedModules.includes(module.id);
+                  return (
+                    <button
+                      key={module.id}
+                      type="button"
+                      className={
+                        checked ? "module-chip active" : "module-chip"
+                      }
+                      onClick={(e) => {
+                        toggleModule(module.id);
+                        e.currentTarget.blur();
+                      }}
+                      aria-pressed={checked}
+                    >
+                      <span className="chip-indicator" aria-hidden="true">
+                        {checked ? "\u2713" : "+"}
+                      </span>
+                      <span className="module-chip-content">
+                        <span className="chip-text">{module.name}</span>
+                        {module.description && (
+                          <span className="chip-desc">{module.description}</span>
+                        )}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
