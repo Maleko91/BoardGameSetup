@@ -24,7 +24,7 @@ and in-game helper tools.
 - [x] Admin panel with full CRUD for games, expansions, steps
 - [x] Responsive mobile-first design
 - [x] Supabase backend (PostgreSQL + Auth + Storage)
-- [x] Deployed on GitHub Pages
+- [x] Deployed on Vercel
 
 ---
 
@@ -35,9 +35,9 @@ Phases are numbered in the order they should be started. Some can overlap
 
 | Phase  |               Name                 |    Status   | Can overlap with |
 |--------|------------------------------------|-------------|------------------|
-| **1**  | Dev Environment & Vercel Migration | Not started |        —         |
-| **2**  | Security Hardening                 | Not started |      Phase 3     |
-| **3**  | Steps Table Restructure            | Not started |      Phase 2     |
+| **1**  | Dev Environment & Vercel Migration | **Done**    |        —         |
+| **2**  | Security Hardening                 | **Done**    |      Phase 3     |
+| **3**  | Steps Table Restructure            | **Done**    |      Phase 2     |
 | **4**  | Game Modes & Solo Support          | Not started |      Phase 5     |
 | **5**  | User Game Library                  | Not started |      Phase 4     |
 | **6**  | Asymmetric Player Setup            | Not started |      Phase 7     |
@@ -55,7 +55,7 @@ Phases are numbered in the order they should be started. Some can overlap
 
 ## Phase 1 — Dev Environment & Vercel Migration
 
-**Status:** Not started
+**Status:** Done
 **Goal:** Set up a safe development environment and modern hosting before making any
 schema or security changes.
 
@@ -63,13 +63,13 @@ schema or security changes.
 
 | # | Item | Description | Status |
 |---|------|-------------|--------|
-| 1.1 | Create dev Supabase project | New Supabase project (free tier allows 2 active projects). Separate URL and anon key for development | [ ] |
-| 1.2 | Environment file structure | Replace single `.env.local` with: `.env.development` (dev Supabase credentials, committed as reference), `.env.production` (prod credentials, gitignored), `.env.local` (personal overrides, gitignored) | [ ] |
-| 1.3 | Update `.gitignore` | Add `.env.local`, `.env.production`, `.env*.local` to `.gitignore`. Fixes the current credential exposure risk | [ ] |
-| 1.4 | Vite env mode support | Vite already loads `.env.development` in `vite dev` and `.env.production` in `vite build` — verify this works and document the convention | [ ] |
-| 1.5 | Schema sync scripts | Create a `supabase/` directory with migration SQL files so the same schema can be applied to both dev and prod databases | [ ] |
-| 1.6 | Seed data script | SQL seed file with a handful of test games, expansions, steps, and a test admin user for the dev database | [ ] |
-| 1.7 | Supabase CLI (optional) | Install `supabase` CLI for local development — runs Postgres + Auth + Storage locally via Docker | [ ] |
+| 1.1 | Create dev Supabase project | New Supabase project (free tier allows 2 active projects). Separate URL and anon key for development | [x] |
+| 1.2 | Environment file structure | Replace single `.env.local` with: `.env.development` (dev Supabase credentials, committed as reference), `.env.production` (prod credentials, gitignored), `.env.local` (personal overrides, gitignored) | [x] |
+| 1.3 | Update `.gitignore` | Add `.env.local`, `.env.production`, `.env*.local` to `.gitignore`. Fixes the current credential exposure risk | [x] |
+| 1.4 | Vite env mode support | Vite already loads `.env.development` in `vite dev` and `.env.production` in `vite build` — verify this works and document the convention | [x] |
+| 1.5 | Schema sync scripts | Create a `supabase/` directory with migration SQL files so the same schema can be applied to both dev and prod databases | [x] |
+| 1.6 | Seed data script | SQL seed file with a handful of test games, expansions, steps, and a test admin user for the dev database | [x] |
+| 1.7 | Supabase CLI (optional) | Install `supabase` CLI for local development — runs Postgres + Auth + Storage locally via Docker | — |
 
 **File structure after setup:**
 ```
@@ -89,16 +89,16 @@ supabase/
 
 | # | Item | Description | Status |
 |---|------|-------------|--------|
-| 1.8 | Connect repo to Vercel | Import the GitHub repo into Vercel. Configure build command (`npm run build`) and output directory (`dist`) | [ ] |
-| 1.9 | Set environment variables | Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to Vercel project settings. Use production values for Production env, dev values for Preview env | [ ] |
-| 1.10 | Add `vercel.json` SPA rewrite | Add rewrite rule so all routes serve `index.html` (replaces the 404.html hack) | [ ] |
-| 1.11 | Remove base path | Change `base: "/BoardGameSetup/"` to `base: "/"` in `vite.config.ts` | [ ] |
-| 1.12 | Remove GitHub Pages routing hacks | Delete `public/404.html`, remove redirect script from `index.html` (lines 7-25), remove hash-to-path conversion from `main.tsx` (lines 18-41) | [ ] |
-| 1.13 | Update router basename | Router `basename` changes from `/BoardGameSetup/` to `/` (or remove the option entirely) | [ ] |
-| 1.14 | Add security headers | Create `vercel.json` headers section with `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, CSP | [ ] |
-| 1.15 | Preview deployments | Verify Vercel automatically creates preview URLs for pull requests. Configure preview env to use dev Supabase | [ ] |
-| 1.16 | Custom domain (optional) | Point a custom domain to Vercel. Vercel handles HTTPS automatically | [ ] |
-| 1.17 | Decommission GitHub Pages | Remove `github-pages` branch, update repo settings to disable Pages | [ ] |
+| 1.8 | Connect repo to Vercel | Import the GitHub repo into Vercel. Configure build command (`npm run build`) and output directory (`dist`) | [x] |
+| 1.9 | Set environment variables | Add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` to Vercel project settings. Use production values for Production env, dev values for Preview env | [x] |
+| 1.10 | Add `vercel.json` SPA rewrite | Add rewrite rule so all routes serve `index.html` (replaces the 404.html hack) | [x] |
+| 1.11 | Remove base path | Change `base: "/BoardGameSetup/"` to `base: "/"` in `vite.config.ts` | [x] |
+| 1.12 | Remove GitHub Pages routing hacks | Delete `public/404.html`, remove redirect script from `index.html` (lines 7-25), remove hash-to-path conversion from `main.tsx` (lines 18-41) | [x] |
+| 1.13 | Update router basename | Router `basename` changes from `/BoardGameSetup/` to `/` (or remove the option entirely) | [x] |
+| 1.14 | Add security headers | Create `vercel.json` headers section with `X-Frame-Options`, `X-Content-Type-Options`, `Referrer-Policy`, CSP | [x] |
+| 1.15 | Preview deployments | Verify Vercel automatically creates preview URLs for pull requests. Configure preview env to use dev Supabase | [x] |
+| 1.16 | Custom domain (optional) | Point a custom domain to Vercel. Vercel handles HTTPS automatically | — |
+| 1.17 | Decommission GitHub Pages | Remove `github-pages` branch, update repo settings to disable Pages | [x] |
 
 **New `vercel.json`:**
 ```json
@@ -133,7 +133,7 @@ supabase/
 
 ## Phase 2 — Security Hardening
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** Phase 1 (dev database needed to test RLS policies safely)
 **Can overlap with:** Phase 3
 
@@ -141,24 +141,24 @@ supabase/
 
 | # | Item | Description | Status |
 |---|------|-------------|--------|
-| 2.1 | Supabase RLS policies | No Row Level Security policies found — all tables are unprotected at the database level. Add RLS to enforce: public read-only for games/steps/expansions, user-only access to own profile, admin-only writes. Without this, any authenticated user can modify any data via direct API calls | [ ] |
-| 2.2 | Admin authorization server-side | Admin check is client-side only (`is_admin` flag queried then UI-gated). A user could bypass the UI and call Supabase directly. RLS policies must enforce admin-only writes independently of the frontend | [ ] |
+| 2.1 | Supabase RLS policies | No Row Level Security policies found — all tables are unprotected at the database level. Add RLS to enforce: public read-only for games/steps/expansions, user-only access to own profile, admin-only writes. Without this, any authenticated user can modify any data via direct API calls | [x] |
+| 2.2 | Admin authorization server-side | Admin check is client-side only (`is_admin` flag queried then UI-gated). A user could bypass the UI and call Supabase directly. RLS policies must enforce admin-only writes independently of the frontend | [x] |
 
 ### High
 
 | # | Item | Description | Status |
 |---|------|-------------|--------|
 | 2.3 | Rate limiting on auth | No rate limiting on login attempts, password resets, or signup. Add Supabase Auth rate limits (configurable in dashboard) and consider edge functions for custom endpoints | [ ] |
-| 2.4 | Error message sanitization | Supabase error objects (`.message`, `.details`, `.hint`) are displayed directly to users. These can leak table names, column names, and SQL details. Wrap errors in generic user-facing messages; log full details only in dev mode | [ ] |
-| 2.5 | File upload validation | Admin image uploads have filename sanitization but no checks on file size, MIME type, or image dimensions. Add client-side validation (max size, allowed types: `image/png`, `image/jpeg`, `image/webp`) and configure Supabase Storage bucket policies | [ ] |
+| 2.4 | Error message sanitization | Supabase error objects (`.message`, `.details`, `.hint`) are displayed directly to users. These can leak table names, column names, and SQL details. Wrap errors in generic user-facing messages; log full details only in dev mode | [x] |
+| 2.5 | File upload validation | Admin image uploads have filename sanitization but no checks on file size, MIME type, or image dimensions. Add client-side validation (max size, allowed types: `image/png`, `image/jpeg`, `image/webp`) and configure Supabase Storage bucket policies | [x] |
 
 ### Medium
 
 | # | Item | Description | Status |
 |---|------|-------------|--------|
-| 2.6 | Content Security Policy | Add CSP header restricting scripts to self and Supabase origin, blocking inline scripts. *(Basic frame/content headers already added by 1.14)* | [ ] |
+| 2.6 | Content Security Policy | Add CSP header restricting scripts to self and Supabase origin, blocking inline scripts. *(Basic frame/content headers already added by 1.14)* | [x] |
 | 2.7 | Dependency auditing | No `npm audit` in CI. Add automated dependency vulnerability scanning to the CI/CD pipeline | [ ] |
-| 2.8 | Supabase client hardening | Supabase client silently falls back to empty strings if env vars are missing. Add a startup check that throws immediately if configuration is absent | [ ] |
+| 2.8 | Supabase client hardening | Supabase client silently falls back to empty strings if env vars are missing. Add a startup check that throws immediately if configuration is absent | [x] |
 
 ### Ongoing
 
@@ -207,7 +207,7 @@ create policy "Admin manage users" on users for all
 
 ## Phase 3 — Steps Table Restructure
 
-**Status:** Not started
+**Status:** Done
 **Depends on:** Phase 1 (run migrations on dev database first)
 **Can overlap with:** Phase 2
 
@@ -221,14 +221,14 @@ condition types trivial (just add JSON keys, no `ALTER TABLE`).
 
 | # | Item | Description | Status |
 |---|------|-------------|--------|
-| 3.1 | Add `conditions` JSONB column | Add `conditions jsonb default '{}'` to the `steps` table | [ ] |
-| 3.2 | Migrate existing data | SQL script to merge `player_counts`, `include_expansions`, `exclude_expansions`, `include_modules`, `exclude_modules`, `require_no_expansions` into the JSONB column | [ ] |
-| 3.3 | Add cleanup trigger | Postgres trigger that removes orphaned IDs from `conditions` when an expansion, module, mode, role, scenario, or map is deleted. Solves the current orphaning risk | [ ] |
-| 3.4 | Update GameSetupPage queries | Read `conditions` instead of individual columns. Simplifies the 30-line mapping to `const conditions = step.conditions ?? {}` | [ ] |
-| 3.5 | Update AdminApp step editor | Step form reads/writes conditions from the JSONB column. Checkbox matrix UI stays the same, just backed by a JSON object instead of CSV strings | [ ] |
-| 3.6 | Update TypeScript types | `GameSetupStepRow` drops individual condition fields, gains `conditions: StepCondition \| null` | [ ] |
-| 3.7 | Drop legacy columns | After verifying migration, drop the 6 old condition columns from the steps table | [ ] |
-| 3.8 | Add step metadata columns | Add `step_type`, `parent_step_id`, `phase`, `parallel_group` as regular columns (these are step properties, not filter conditions, so they stay as columns) | [ ] |
+| 3.1 | Add `conditions` JSONB column | Add `conditions jsonb default '{}'` to the `steps` table | [x] |
+| 3.2 | Migrate existing data | SQL script to merge `player_counts`, `include_expansions`, `exclude_expansions`, `include_modules`, `exclude_modules`, `require_no_expansions` into the JSONB column | [x] |
+| 3.3 | Add cleanup trigger | Postgres trigger that removes orphaned IDs from `conditions` when an expansion, module, mode, role, scenario, or map is deleted. Solves the current orphaning risk | [x] |
+| 3.4 | Update GameSetupPage queries | Read `conditions` instead of individual columns. Simplifies the 30-line mapping to `const conditions = step.conditions ?? {}` | [x] |
+| 3.5 | Update AdminApp step editor | Step form reads/writes conditions from the JSONB column. Checkbox matrix UI stays the same, just backed by a JSON object instead of CSV strings | [x] |
+| 3.6 | Update TypeScript types | `GameSetupStepRow` drops individual condition fields, gains `conditions: StepCondition \| null` | [x] |
+| 3.7 | Drop legacy columns | After verifying migration, drop the 6 old condition columns from the steps table | [x] |
+| 3.8 | Add step metadata columns | Add `step_type`, `parent_step_id`, `phase`, `parallel_group` as regular columns (these are step properties, not filter conditions, so they stay as columns) | [x] |
 
 **Migration SQL:**
 ```sql

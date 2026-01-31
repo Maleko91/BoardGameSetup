@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { supabase, supabaseReady } from "../lib/supabase";
+import { getSafeErrorMessage } from "../lib/errors";
 import type {
   ConditionalStep,
   ExpansionModule,
@@ -58,10 +59,7 @@ export default function GameSetupPage() {
           .single();
 
         if (gameRowError || !gameRow) {
-          throw new Error(
-            gameRowError?.message ??
-              `Could not load game data for "${resolvedGameId}".`
-          );
+          throw gameRowError ?? new Error("Game not found.");
         }
 
         const [
@@ -75,17 +73,17 @@ export default function GameSetupPage() {
           client
             .from("steps")
             .select(
-              "step_order, text, visual_asset, visual_animation, player_counts, include_expansions, exclude_expansions, include_modules, exclude_modules, require_no_expansions"
+              "step_order, text, visual_asset, visual_animation, conditions, step_type, parent_step_id, phase, parallel_group"
             )
             .eq("game_id", resolvedGameId)
             .order("step_order", { ascending: true })
         ]);
 
         if (expansionsError) {
-          throw new Error(expansionsError.message);
+          throw expansionsError;
         }
         if (stepsError) {
-          throw new Error(stepsError.message);
+          throw stepsError;
         }
 
         const expansionIds = (expansions ?? []).map((expansion) => expansion.id);
@@ -103,10 +101,10 @@ export default function GameSetupPage() {
         ]);
 
         if (expansionModulesResult.error) {
-          throw new Error(expansionModulesResult.error.message);
+          throw expansionModulesResult.error;
         }
         if (baseModulesResult.error) {
-          throw new Error(baseModulesResult.error.message);
+          throw baseModulesResult.error;
         }
 
         const modules: ModuleRow[] = [
@@ -138,25 +136,7 @@ export default function GameSetupPage() {
         const conditionalSteps: ConditionalStep[] = [];
 
         (steps ?? []).forEach((step) => {
-          const when: StepCondition = {};
-          if (step.player_counts?.length) {
-            when.playerCounts = step.player_counts;
-          }
-          if (step.include_expansions?.length) {
-            when.includeExpansions = step.include_expansions;
-          }
-          if (step.exclude_expansions?.length) {
-            when.excludeExpansions = step.exclude_expansions;
-          }
-          if (step.include_modules?.length) {
-            when.includeModules = step.include_modules;
-          }
-          if (step.exclude_modules?.length) {
-            when.excludeModules = step.exclude_modules;
-          }
-          if (step.require_no_expansions) {
-            when.requireNoExpansions = true;
-          }
+          const when: StepCondition = step.conditions ?? {};
 
           const mappedStep: Step = {
             order: Number(step.step_order),
@@ -193,7 +173,7 @@ export default function GameSetupPage() {
         if (!active) {
           return;
         }
-        setGameError(err instanceof Error ? err.message : String(err));
+        setGameError(getSafeErrorMessage(err));
       } finally {
         if (!active) {
           return;

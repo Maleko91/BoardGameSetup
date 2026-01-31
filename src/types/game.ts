@@ -20,12 +20,25 @@ export type Step = {
 };
 
 export type StepCondition = {
+  // Existing (migrated from flat columns into JSONB in Phase 3)
   playerCounts?: number[];
   includeExpansions?: string[];
   excludeExpansions?: string[];
   includeModules?: string[];
   excludeModules?: string[];
   requireNoExpansions?: boolean;
+  // Phase 4: Modes
+  includeModes?: string[];
+  excludeModes?: string[];
+  // Phase 6: Roles
+  includeRoles?: string[];
+  excludeRoles?: string[];
+  // Phase 10: Scenarios
+  includeScenarios?: string[];
+  excludeScenarios?: string[];
+  // Phase 12: Maps
+  includeMaps?: string[];
+  excludeMaps?: string[];
 };
 
 export type ConditionalStep = Step & {
@@ -67,10 +80,9 @@ export type GameSetupStepRow = {
   text: string;
   visual_asset: string | null;
   visual_animation: string | null;
-  player_counts: number[] | null;
-  include_expansions: string[] | null;
-  exclude_expansions: string[] | null;
-  include_modules: string[] | null;
-  exclude_modules: string[] | null;
-  require_no_expansions: boolean | null;
+  conditions: StepCondition | null;
+  step_type: string;
+  parent_step_id: string | null;
+  phase: string;
+  parallel_group: string | null;
 };

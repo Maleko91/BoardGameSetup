@@ -13,8 +13,12 @@ import { useLocation } from "react-router-dom";
 import ShellLayout from "./components/ShellLayout";
 import { useSession } from "./context/SessionContext";
 import { supabase, supabaseReady } from "./lib/supabase";
+import { getSafeErrorMessage } from "./lib/errors";
 
 const IMAGE_BUCKET = "Card images";
+const MAX_UPLOAD_SIZE_MB = 5;
+const MAX_UPLOAD_SIZE_BYTES = MAX_UPLOAD_SIZE_MB * 1024 * 1024;
+const ALLOWED_IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 const GAME_PAGE_SIZE = 8;
 const EXPANSION_PAGE_SIZE = 8;
 const MODULE_PAGE_SIZE = 8;
@@ -44,17 +48,25 @@ type ModuleRow = {
   description: string | null;
 };
 
+type StepConditions = {
+  playerCounts?: number[];
+  includeExpansions?: string[];
+  excludeExpansions?: string[];
+  includeModules?: string[];
+  excludeModules?: string[];
+  requireNoExpansions?: boolean;
+};
+
 type StepRow = {
   id: string;
   game_id: string;
   step_order: number;
   text: string;
-  player_counts: number[] | null;
-  include_expansions: string[] | null;
-  exclude_expansions: string[] | null;
-  include_modules: string[] | null;
-  exclude_modules: string[] | null;
-  require_no_expansions: boolean | null;
+  conditions: StepConditions | null;
+  step_type: string;
+  parent_step_id: string | null;
+  phase: string;
+  parallel_group: string | null;
 };
 
 type AdminUserRow = {
@@ -175,40 +187,7 @@ const optionalString = (value: string) => {
   return trimmed ? trimmed : null;
 };
 
-const getErrorMessage = (err: unknown) => {
-  if (err instanceof Error) {
-    return err.message;
-  }
-  if (typeof err === "string") {
-    return err;
-  }
-  if (err && typeof err === "object") {
-    const { message, details, hint } = err as {
-      message?: unknown;
-      details?: unknown;
-      hint?: unknown;
-    };
-    const parts: string[] = [];
-    if (typeof message === "string") {
-      parts.push(message);
-    }
-    if (typeof details === "string") {
-      parts.push(details);
-    }
-    if (typeof hint === "string") {
-      parts.push(hint);
-    }
-    if (parts.length) {
-      return parts.join(" ");
-    }
-    try {
-      return JSON.stringify(err);
-    } catch {
-      return "Unexpected error.";
-    }
-  }
-  return String(err);
-};
+const getErrorMessage = getSafeErrorMessage;
 
 const buildUploadPath = (folder: string, file: File) => {
   const safeName = file.name.replace(/[^a-zA-Z0-9_.-]/g, "_");
@@ -473,7 +452,7 @@ export default function AdminApp() {
       const { data, error } = await client
         .from("steps")
         .select(
-          "id, game_id, step_order, text, player_counts, include_expansions, exclude_expansions, include_modules, exclude_modules, require_no_expansions"
+          "id, game_id, step_order, text, conditions, step_type, parent_step_id, phase, parallel_group"
         )
         .eq("game_id", gameId)
         .order("step_order", { ascending: true });
@@ -666,16 +645,17 @@ export default function AdminApp() {
       return;
     }
     setStepMode("edit");
+    const cond = selected.conditions ?? {};
     setStepForm({
       id: selected.id,
       step_order: String(selected.step_order ?? ""),
       text: selected.text ?? "",
-      player_counts: joinCsv(selected.player_counts),
-      include_expansions: joinCsv(selected.include_expansions),
-      exclude_expansions: joinCsv(selected.exclude_expansions),
-      include_modules: joinCsv(selected.include_modules),
-      exclude_modules: joinCsv(selected.exclude_modules),
-      require_no_expansions: Boolean(selected.require_no_expansions)
+      player_counts: joinCsv(cond.playerCounts),
+      include_expansions: joinCsv(cond.includeExpansions),
+      exclude_expansions: joinCsv(cond.excludeExpansions),
+      include_modules: joinCsv(cond.includeModules),
+      exclude_modules: joinCsv(cond.excludeModules),
+      require_no_expansions: Boolean(cond.requireNoExpansions)
     });
   }, [selectedStepId, stepMode, steps]);
 
@@ -764,6 +744,17 @@ export default function AdminApp() {
   const handleCoverUpload = async (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) {
+      return;
+    }
+    // Phase 2.5: Validate file before uploading
+    if (!ALLOWED_IMAGE_TYPES.has(file.type)) {
+      setGameMessage("Invalid file type. Allowed: PNG, JPEG, WebP.");
+      event.target.value = "";
+      return;
+    }
+    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+      setGameMessage(`File too large. Maximum size is ${MAX_UPLOAD_SIZE_MB}MB.`);
+      event.target.value = "";
       return;
     }
     setGameCoverUploading(true);
@@ -1203,33 +1194,25 @@ export default function AdminApp() {
       setStepMessage("Step text is required.");
       return;
     }
-    const payload = {
+    // Build conditions JSONB — only include non-empty values
+    const conditions: StepConditions = {};
+    const playerCounts = splitNumberCsv(stepForm.player_counts);
+    const includeExpansions = splitCsv(stepForm.include_expansions);
+    const excludeExpansions = splitCsv(stepForm.exclude_expansions);
+    const includeModules = splitCsv(stepForm.include_modules);
+    const excludeModules = splitCsv(stepForm.exclude_modules);
+    if (playerCounts.length) conditions.playerCounts = playerCounts;
+    if (includeExpansions.length) conditions.includeExpansions = includeExpansions;
+    if (excludeExpansions.length) conditions.excludeExpansions = excludeExpansions;
+    if (includeModules.length) conditions.includeModules = includeModules;
+    if (excludeModules.length) conditions.excludeModules = excludeModules;
+    if (stepForm.require_no_expansions) conditions.requireNoExpansions = true;
+
+    const normalizedPayload = {
       game_id: selectedGameId,
       step_order: orderValue,
       text,
-      player_counts: splitNumberCsv(stepForm.player_counts),
-      include_expansions: splitCsv(stepForm.include_expansions),
-      exclude_expansions: splitCsv(stepForm.exclude_expansions),
-      include_modules: splitCsv(stepForm.include_modules),
-      exclude_modules: splitCsv(stepForm.exclude_modules),
-      require_no_expansions: stepForm.require_no_expansions
-    };
-
-    const normalizedPayload = {
-      ...payload,
-      player_counts: payload.player_counts.length ? payload.player_counts : null,
-      include_expansions: payload.include_expansions.length
-        ? payload.include_expansions
-        : null,
-      exclude_expansions: payload.exclude_expansions.length
-        ? payload.exclude_expansions
-        : null,
-      include_modules: payload.include_modules.length
-        ? payload.include_modules
-        : null,
-      exclude_modules: payload.exclude_modules.length
-        ? payload.exclude_modules
-        : null
+      conditions: Object.keys(conditions).length ? conditions : {}
     };
 
     try {
@@ -1365,30 +1348,31 @@ export default function AdminApp() {
     const hasExpansion = Boolean(selectedExpansionId);
     const hasModule = Boolean(selectedModuleId);
     return sortedSteps.filter((step) => {
-      if (step.require_no_expansions && hasExpansion) {
+      const cond = step.conditions ?? {};
+      if (cond.requireNoExpansions && hasExpansion) {
         return false;
       }
-      if (step.include_expansions?.length) {
-        if (!hasExpansion || !step.include_expansions.includes(selectedExpansionId)) {
+      if (cond.includeExpansions?.length) {
+        if (!hasExpansion || !cond.includeExpansions.includes(selectedExpansionId)) {
           return false;
         }
       }
       if (
-        step.exclude_expansions?.length &&
+        cond.excludeExpansions?.length &&
         hasExpansion &&
-        step.exclude_expansions.includes(selectedExpansionId)
+        cond.excludeExpansions.includes(selectedExpansionId)
       ) {
         return false;
       }
-      if (step.include_modules?.length) {
-        if (!hasModule || !step.include_modules.includes(selectedModuleId)) {
+      if (cond.includeModules?.length) {
+        if (!hasModule || !cond.includeModules.includes(selectedModuleId)) {
           return false;
         }
       }
       if (
-        step.exclude_modules?.length &&
+        cond.excludeModules?.length &&
         hasModule &&
-        step.exclude_modules.includes(selectedModuleId)
+        cond.excludeModules.includes(selectedModuleId)
       ) {
         return false;
       }

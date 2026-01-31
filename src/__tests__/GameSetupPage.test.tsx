@@ -86,60 +86,55 @@ describe("GameSetupPage", () => {
         text: "Always",
         visual_asset: null,
         visual_animation: null,
-        player_counts: null,
-        include_expansions: null,
-        exclude_expansions: null,
-        include_modules: null,
-        exclude_modules: null,
-        require_no_expansions: null
+        conditions: null,
+        step_type: "standard",
+        parent_step_id: null,
+        phase: "board_setup",
+        parallel_group: null
       },
       {
         step_order: 2,
         text: "Base only",
         visual_asset: null,
         visual_animation: null,
-        player_counts: null,
-        include_expansions: null,
-        exclude_expansions: null,
-        include_modules: null,
-        exclude_modules: null,
-        require_no_expansions: true
+        conditions: { requireNoExpansions: true },
+        step_type: "standard",
+        parent_step_id: null,
+        phase: "board_setup",
+        parallel_group: null
       },
       {
         step_order: 3,
         text: "With expansion",
         visual_asset: null,
         visual_animation: null,
-        player_counts: null,
-        include_expansions: ["exp-1"],
-        exclude_expansions: null,
-        include_modules: null,
-        exclude_modules: null,
-        require_no_expansions: null
+        conditions: { includeExpansions: ["exp-1"] },
+        step_type: "standard",
+        parent_step_id: null,
+        phase: "board_setup",
+        parallel_group: null
       },
       {
         step_order: 4,
         text: "With base module",
         visual_asset: null,
         visual_animation: null,
-        player_counts: null,
-        include_expansions: null,
-        exclude_expansions: null,
-        include_modules: ["mod-base-1"],
-        exclude_modules: null,
-        require_no_expansions: null
+        conditions: { includeModules: ["mod-base-1"] },
+        step_type: "standard",
+        parent_step_id: null,
+        phase: "board_setup",
+        parallel_group: null
       },
       {
         step_order: 5,
         text: "Exclude expansion module",
         visual_asset: null,
         visual_animation: null,
-        player_counts: null,
-        include_expansions: null,
-        exclude_expansions: null,
-        include_modules: null,
-        exclude_modules: ["mod-exp-1"],
-        require_no_expansions: null
+        conditions: { excludeModules: ["mod-exp-1"] },
+        step_type: "standard",
+        parent_step_id: null,
+        phase: "board_setup",
+        parallel_group: null
       }
     ]);
 
